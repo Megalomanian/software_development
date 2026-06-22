@@ -371,7 +371,171 @@ GET /api/monitoring/{deployment_id}/drift
 
 ---
 
-### 6. 健康检查
+### 6. 用户认证 `/api/auth`
+
+所有密码使用 bcrypt 哈希存储，Token 使用 JWT (HS256) 签发，默认有效期 1440 分钟（24 小时）。需要在 `Authorization` 头中携带 `Bearer <token>`。
+
+#### `POST /register` — 注册
+```json
+{
+  "username": "alice",       // 必填，全局唯一
+  "email": "alice@test.com", // 必填，全局唯一
+  "password": "secret123"    // 必填，至少 6 位
+}
+```
+**成功响应** (200):
+```json
+{
+  "id": "uuid",
+  "username": "alice",
+  "email": "alice@test.com",
+  "role": "user",
+  "access_token": "eyJ...",
+  "token_type": "bearer"
+}
+```
+> 注册成功即返回 token，无需再登录。
+
+**错误响应**:
+- 409 — `{"detail": "Email already registered"}`
+- 409 — `{"detail": "Username already taken"}`
+- 422 — `{"detail": "Password must be at least 6 characters"}`
+
+#### `POST /login` — 登录
+```json
+{
+  "email": "alice@test.com",
+  "password": "secret123"
+}
+```
+**成功响应** (200): 同注册返回（id, username, email, role, access_token, token_type）
+
+**错误响应**:
+- 401 — `{"detail": "Invalid email or password"}`
+
+#### `GET /me` — 当前用户
+```
+Authorization: Bearer <token>
+```
+**成功响应** (200):
+```json
+{
+  "id": "uuid",
+  "username": "alice",
+  "email": "alice@test.com",
+  "role": "user",
+  "created_at": "2026-06-22T14:00:00"
+}
+```
+**错误响应**: 401 — Token 无效或过期
+
+#### `GET /users` — 用户列表（需认证）
+```
+GET /api/auth/users?offset=0&limit=50
+Authorization: Bearer <token>
+```
+**响应**: 数组，元素同 `/me` 格式。
+
+---
+
+### 7. 训练任务队列
+
+当有多个模型训练任务需要执行时，可通过队列接口排队执行。队列采用 **FIFO**（先进先出）策略，后台 worker 逐个处理，一次只运行一个任务。
+
+队列集成在 `/api/experiments` 路由下：
+
+#### `POST /api/experiments/{id}/enqueue` — 加入队列
+将已创建的实验加入训练队列。无需请求体。
+
+**成功响应** (200):
+```json
+{
+  "experiment_id": "uuid",
+  "position": 1,
+  "status": "queued"
+}
+```
+**错误响应**: 404 — 实验不存在
+
+#### `GET /api/experiments/queue/status` — 查看队列
+```
+GET /api/experiments/queue/status
+```
+**响应**:
+```json
+{
+  "total": 5,
+  "pending": 2,
+  "running": {
+    "experiment_id": "uuid",
+    "experiment_name": "iris-classifier",
+    "position": 1,
+    "status": "running",
+    "added_at": "2026-06-22T14:00:00",
+    "error": null
+  },
+  "completed": 2,
+  "failed": 1,
+  "jobs": [
+    {"experiment_id": "uuid", "experiment_name": "iris-classifier", "position": 1, "status": "running", "added_at": "...", "error": null},
+    {"experiment_id": "uuid", "experiment_name": "regression-test", "position": 2, "status": "queued", "added_at": "...", "error": null},
+    {"experiment_id": "uuid", "experiment_name": "batch-1", "position": 3, "status": "completed", "added_at": "...", "error": null},
+    {"experiment_id": "uuid", "experiment_name": "batch-2", "position": 4, "status": "failed", "added_at": "...", "error": "..."},
+    {"experiment_id": "uuid", "experiment_name": "batch-3", "position": 5, "status": "completed", "added_at": "...", "error": null}
+  ]
+}
+```
+
+**字段说明**:
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| total | int | 累计任务总数 |
+| pending | int | 等待中的数量 |
+| running | object\|null | 当前正在运行的任务（无则为 null） |
+| completed | int | 已完成数量 |
+| failed | int | 失败数量 |
+| jobs | array | 全部任务列表（按入队顺序） |
+
+**`status` 流转**:
+```
+queued → running → completed
+              ↘ failed
+```
+
+> **注意**: worker 是应用进程内的后台 asyncio 任务，服务器重启后队列会丢失。
+
+---
+
+### 8. 系统状态 `/api/system`
+
+#### `GET /status` — 全局概览
+```
+GET /api/system/status
+```
+**响应**:
+```json
+{
+  "server": "ok",
+  "counts": {
+    "datasets": 12,
+    "experiments": 8,
+    "models": 5,
+    "deployments": 3,
+    "running_deployments": 2
+  },
+  "recent_experiments": [
+    {"id": "uuid", "name": "iris-v2", "status": "completed", "created_at": "..."}
+  ],
+  "running_deployments_list": [
+    {"id": "uuid", "name": "dep-iris-v1", "endpoint_url": "http://..."}
+  ]
+}
+```
+
+---
+
+### 9. 健康检查
 
 #### `GET /api/health`
 ```json
@@ -382,8 +546,9 @@ GET /api/monitoring/{deployment_id}/drift
 
 ## 完整流程示例
 
+### 基础流程：数据 → 训练 → 部署 → 预测
+
 ```bash
-# 用 curl 走通全流程
 # 1. 上传数据
 curl -F "file=@iris.csv" http://localhost:8000/api/data/upload
 # → {"id": "ds-xxx", "name": "iris.csv", "row_count": 150, ...}
@@ -429,6 +594,49 @@ curl -X POST http://localhost:8000/api/deployments/dep-xxx/stop
 # → {"id": "dep-xxx", "status": "stopped"}
 ```
 
+### 用户认证流程
+
+```bash
+# 注册
+curl -X POST http://localhost:8000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","email":"alice@test.com","password":"secret123"}'
+# → {"id": "user-xxx", "username": "alice", "access_token": "eyJ...", ...}
+
+# 登录
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@test.com","password":"secret123"}'
+# → {"id": "user-xxx", "username": "alice", "access_token": "eyJ...", ...}
+
+# 查看当前用户
+curl http://localhost:8000/api/auth/me \
+  -H "Authorization: Bearer eyJ..."
+# → {"id": "user-xxx", "username": "alice", "email": "alice@test.com", "role": "user", ...}
+```
+
+### 批量训练队列流程
+
+```bash
+# 创建 3 个实验并加入队列
+for name in batch-1 batch-2 batch-3; do
+  # 创建实验 (假设已有 dataset_id)
+  EXP_ID=$(curl -s -X POST http://localhost:8000/api/experiments/ \
+    -H "Content-Type: application/json" \
+    -d "{\"name\":\"$name\",\"dataset_id\":\"ds-xxx\",\"target_column\":\"target\",\"problem_type\":\"classification\"}" \
+    | jq -r '.id')
+  # 加入队列
+  curl -X POST "http://localhost:8000/api/experiments/$EXP_ID/enqueue"
+done
+
+# 查看队列状态
+curl http://localhost:8000/api/experiments/queue/status | jq .
+# → {"total":3, "pending":2, "running":{...}, "completed":0, "failed":0, "jobs":[...]}
+
+# 等待全部完成（轮询直到 pending==0）
+curl http://localhost:8000/api/experiments/queue/status | jq '.pending'
+```
+
 ---
 
 ## Python SDK
@@ -439,6 +647,11 @@ from ml_platform import Client
 
 async def main():
     async with Client("http://localhost:8000") as client:
+        # 注册 & 登录
+        user = await client.auth.register("alice", "alice@test.com", "secret123")
+        # 后续请求自动携带 token
+        client.set_token(user["access_token"])
+
         # 上传 → 训练 → 注册 → 部署 → 预测
         ds = await client.data.upload("iris.csv")
         exp = await client.experiments.create(
@@ -453,12 +666,27 @@ async def main():
         })
         print(pred)  # {"prediction": ["setosa"]}
 
+        # 系统状态
+        status = await client.system.status()
+        print(status)
+
 asyncio.run(main())
 ```
 
 ---
 
 ## 数据模型速查
+
+### User
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | UUID | 主键 |
+| username | str | 用户名（唯一） |
+| email | str | 邮箱（唯一，用于登录） |
+| hashed_password | str | bcrypt 哈希密码 |
+| role | str | user（默认） |
+| created_at | datetime | |
+| updated_at | datetime | |
 
 ### Dataset
 | 字段 | 类型 | 说明 |
@@ -540,8 +768,15 @@ deploying ──→ running ──→ stopped
 
 ```
 ├── backend/
-│   ├── main.py              # FastAPI 入口，路由注册
-│   ├── api/                 # 路由层 (data, experiments, models, deployments, monitoring)
+│   ├── main.py              # FastAPI 入口，路由注册 + lifespan
+│   ├── api/                 # 路由层
+│   │   ├── data.py                  # 数据管理
+│   │   ├── experiments.py           # 实验训练 + 队列
+│   │   ├── models.py                # 模型管理
+│   │   ├── deployments.py           # 在线推理
+│   │   ├── monitoring.py            # 监控告警
+│   │   ├── auth.py                  # 用户认证
+│   │   └── system.py                # 系统状态
 │   ├── services/            # 业务逻辑层
 │   │   ├── data_service.py          # 数据上传 + pandas 画像
 │   │   ├── training_service.py      # 实验 CRUD + sklearn 训练
@@ -549,12 +784,13 @@ deploying ──→ running ──→ stopped
 │   │   ├── deployment_service.py    # 部署生命周期
 │   │   ├── monitoring_service.py    # 指标聚合 + 漂移检测
 │   │   ├── local_serving.py         # 本地内存模型推理
+│   │   ├── training_queue.py        # FIFO 训练任务队列
 │   │   └── ray_serve_manager.py     # Ray Serve 备选方案
-│   ├── models_db/           # SQLAlchemy ORM (Dataset, Experiment, ModelVersion, Deployment, InferenceLog)
-│   ├── core/                # 配置、依赖注入、中间件
+│   ├── models_db/           # SQLAlchemy ORM (Dataset, Experiment, ModelVersion, Deployment, InferenceLog, User)
+│   ├── core/                # 配置 (config.py)、依赖注入 (dependencies.py)、认证 (auth.py)、中间件 (middleware.py)
 │   ├── workflows/           # Temporal 工作流
-│   └── tests/               # 37 个单元测试 + 3 个端到端测试
-├── sdk/ml_platform/         # Python SDK
+│   └── tests/               # 50 个测试 (含 auth + queue + e2e)
+├── sdk/ml_platform/         # Python SDK (client, data, experiments, models, deployments, monitoring, auth, system)
 ├── infra/                   # Prometheus 配置
 ├── demo_full_pipeline.py    # 全流程演示脚本
 ├── docker-compose.yml       # 基础设施服务
@@ -594,12 +830,51 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
 | 路由 | 功能 | 核心 API |
 |------|------|---------|
+| `/login` | 登录 / 注册 | `POST /api/auth/login`, `/register` |
 | `/data` | 数据集上传 + 列表 + 画像 | `GET/POST /api/data` |
 | `/experiments` | 实验列表 + 创建 + 运行 + 指标 | `GET/POST /api/experiments` |
 | `/experiments/:id` | 实验详情 + MLflow 指标面板 | `GET /api/experiments/:id` |
+| `/queue` | 训练队列监控面板 | `GET /api/experiments/queue/status` |
 | `/models` | 模型注册 + 版本列表 | `GET/POST /api/models` |
 | `/deployments` | 部署列表 + 部署/停止 + 在线预测 | `GET/POST /api/deployments` |
 | `/monitoring` | 监控面板 + 漂移检测 | `GET /api/monitoring` |
+| `/status` | 系统状态总览 | `GET /api/system/status` |
+
+### 认证集成
+
+所有需要鉴权的接口在请求头中携带 JWT token：
+
+```typescript
+// 登录成功后存储 token
+const { access_token } = await apiFetch("/api/auth/login", {
+  method: "POST",
+  body: JSON.stringify({ email, password }),
+});
+localStorage.setItem("token", access_token);
+
+// 后续请求统一添加
+function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = localStorage.getItem("token");
+  return fetch(`${API_BASE}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
+    ...options,
+  }).then(async (res) => {
+    if (!res.ok) {
+      if (res.status === 401 && window.location.pathname !== "/login") {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+      }
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  });
+}
+```
 
 ### 典型页面数据流
 

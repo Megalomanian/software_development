@@ -159,10 +159,23 @@ class TrainingQueue:
                 raise
 
     @classmethod
-    def reset(cls) -> None:
-        """Reset the singleton (for testing)."""
-        if cls._instance and cls._instance._worker_task:
+    async def reset(cls) -> None:
+        """Reset the singleton (for testing).
+
+        Clears the queue, cancels the worker, and awaits
+        cancellation to ensure no stale DB sessions remain.
+        """
+        if cls._instance is None:
+            return
+        # Clear queue so worker loop exits naturally
+        cls._instance._queue.clear()
+        # Cancel and await worker task
+        if cls._instance._worker_task and not cls._instance._worker_task.done():
             cls._instance._worker_task.cancel()
+            try:
+                await cls._instance._worker_task
+            except asyncio.CancelledError:
+                pass
         cls._instance = None
 
 

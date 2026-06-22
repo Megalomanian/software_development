@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.auth import get_current_user
 from backend.core.dependencies import get_db
 from backend.models_db.experiment import Experiment
+from backend.models_db.user import User
 from backend.services.training_queue import get_queue
 from backend.services.training_service import TrainingService
 
@@ -21,7 +23,11 @@ async def list_experiments(
 
 
 @router.post("/")
-async def create_experiment(data: dict, db: AsyncSession = Depends(get_db)):
+async def create_experiment(
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     service = TrainingService(db)
     return await service.create_experiment(data)
 
@@ -36,13 +42,21 @@ async def get_experiment(experiment_id: str, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/{experiment_id}/run")
-async def run_experiment(experiment_id: str, db: AsyncSession = Depends(get_db)):
+async def run_experiment(
+    experiment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     service = TrainingService(db)
     return await service.run_experiment(experiment_id)
 
 
 @router.post("/{experiment_id}/run-sklearn")
-async def run_experiment_sklearn(experiment_id: str, db: AsyncSession = Depends(get_db)):
+async def run_experiment_sklearn(
+    experiment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     service = TrainingService(db)
     return await service.run_experiment_sklearn(experiment_id)
 
@@ -54,7 +68,11 @@ async def get_mlflow_metrics(experiment_id: str, db: AsyncSession = Depends(get_
 
 
 @router.delete("/{experiment_id}")
-async def delete_experiment(experiment_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_experiment(
+    experiment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     experiment = await db.scalar(
         select(Experiment).where(Experiment.id == experiment_id)
     )
@@ -98,7 +116,11 @@ async def compare_experiments(
 
 
 @router.post("/{experiment_id}/enqueue")
-async def enqueue_experiment(experiment_id: str, db: AsyncSession = Depends(get_db)):
+async def enqueue_experiment(
+    experiment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Add an experiment to the training queue."""
     service = TrainingService(db)
     experiment = await service.get_experiment(experiment_id)

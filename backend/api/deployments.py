@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.auth import get_current_user
 from backend.core.dependencies import get_db
 from backend.models_db.model import Deployment
+from backend.models_db.user import User
 from backend.services.deployment_service import DeploymentService
 
 router = APIRouter()
@@ -20,7 +22,11 @@ async def list_deployments(
 
 
 @router.post("/")
-async def create_deployment(data: dict, db: AsyncSession = Depends(get_db)):
+async def create_deployment(
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     service = DeploymentService(db)
     return await service.create_deployment(data)
 
@@ -35,7 +41,11 @@ async def get_deployment(deployment_id: str, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/{deployment_id}/stop")
-async def stop_deployment(deployment_id: str, db: AsyncSession = Depends(get_db)):
+async def stop_deployment(
+    deployment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     service = DeploymentService(db)
     return await service.stop_deployment(deployment_id)
 
@@ -47,7 +57,11 @@ async def predict(deployment_id: str, data: dict, db: AsyncSession = Depends(get
 
 
 @router.delete("/{deployment_id}")
-async def delete_deployment(deployment_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_deployment(
+    deployment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     deployment = await db.scalar(
         select(Deployment).where(Deployment.id == deployment_id)
     )
