@@ -24,16 +24,26 @@ async def queue_client(db_session):
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
 
+    from backend.api.auth import router as auth_router
     from backend.api.data import router as data_router
     from backend.api.experiments import router as experiment_router
     from backend.api.models import router as model_router
+    from backend.core.auth import create_access_token, hash_password
     from backend.core.dependencies import get_db
+    from backend.models_db.user import User
     from backend.services.training_queue import TrainingQueue
 
-    TrainingQueue.reset()
+    await TrainingQueue.reset()
+
+    # Create test user
+    user = User(username="queue_test", email="queue@test.com", hashed_password=hash_password("test"))
+    db_session.add(user)
+    await db_session.flush()
+    token = create_access_token({"sub": str(user.id)})
 
     app = FastAPI(title="Queue Test")
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    app.include_router(auth_router, prefix="/api/auth")
     app.include_router(data_router, prefix="/api/data")
     app.include_router(experiment_router, prefix="/api/experiments")
     app.include_router(model_router, prefix="/api/models")
@@ -43,9 +53,12 @@ async def queue_client(db_session):
 
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+    async with AsyncClient(
+        transport=transport, base_url="http://test",
+        headers={"Authorization": f"Bearer {token}"},
+    ) as c:
         yield c
-    TrainingQueue.reset()
+    await TrainingQueue.reset()
 
 
 async def _upload_and_create_exp(client: AsyncClient, name: str, target: str = "target") -> str:

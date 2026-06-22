@@ -30,17 +30,30 @@ async def client(db_session):
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
 
+    from backend.api.auth import router as auth_router
     from backend.api.data import router as data_router
     from backend.api.deployments import router as deployment_router
     from backend.api.experiments import router as experiment_router
     from backend.api.models import router as model_router
     from backend.api.monitoring import router as monitoring_router
+    from backend.core.auth import create_access_token, hash_password
     from backend.core.dependencies import get_db
+    from backend.models_db.user import User
+
+    # Create test user for auth
+    user = User(
+        username="e2e_test", email="e2e@test.com",
+        hashed_password=hash_password("test"),
+    )
+    db_session.add(user)
+    await db_session.flush()
+    token = create_access_token({"sub": str(user.id)})
 
     app = FastAPI(title="E2E Test")
     app.add_middleware(
         CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
     )
+    app.include_router(auth_router, prefix="/api/auth")
     app.include_router(data_router, prefix="/api/data")
     app.include_router(experiment_router, prefix="/api/experiments")
     app.include_router(model_router, prefix="/api/models")
@@ -52,7 +65,10 @@ async def client(db_session):
 
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+    async with AsyncClient(
+        transport=transport, base_url="http://test",
+        headers={"Authorization": f"Bearer {token}"},
+    ) as c:
         yield c
 
 

@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.auth import get_current_user
 from backend.core.dependencies import get_db
 from backend.models_db.model import ModelVersion
+from backend.models_db.user import User
 from backend.services.model_service import ModelService
 
 router = APIRouter()
@@ -29,19 +31,31 @@ async def get_model(model_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{model_id}/promote")
-async def promote_model(model_id: str, db: AsyncSession = Depends(get_db)):
+async def promote_model(
+    model_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     service = ModelService(db)
     return await service.promote_model(model_id)
 
 
 @router.post("/register")
-async def register_model(data: dict, db: AsyncSession = Depends(get_db)):
+async def register_model(
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     service = ModelService(db)
     return await service.register_from_experiment(data["name"], data["experiment_id"])
 
 
 @router.delete("/{model_id}")
-async def delete_model(model_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_model(
+    model_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     model = await db.scalar(
         select(ModelVersion).where(ModelVersion.id == model_id)
     )

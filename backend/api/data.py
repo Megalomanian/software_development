@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.auth import get_current_user
 from backend.core.dependencies import get_db
+from backend.models_db.user import User
 from backend.services.data_service import DataService
 
 router = APIRouter()
@@ -27,7 +31,11 @@ async def get_dataset(dataset_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/upload")
-async def upload_dataset(file: UploadFile, db: AsyncSession = Depends(get_db)):
+async def upload_dataset(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     service = DataService(db)
     return await service.ingest_file(file)
 
@@ -51,6 +59,10 @@ async def preview_dataset(
 
 
 @router.delete("/{dataset_id}")
-async def delete_dataset(dataset_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_dataset(
+    dataset_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     service = DataService(db)
     return await service.delete_dataset(dataset_id)
