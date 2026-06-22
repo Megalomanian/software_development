@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import os
 import uuid
 
 import pandas as pd
-from fastapi import UploadFile
-from sqlalchemy import select
+from fastapi import HTTPException, UploadFile
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models_db.dataset import Dataset, DatasetColumn
@@ -95,6 +96,42 @@ class DataService:
                 for c in columns
             ]
         }
+
+    async def preview(self, dataset_id: str, rows: int = 10) -> dict:
+        """Return first N rows of a dataset as JSON."""
+        dataset = await self.get_dataset(dataset_id)
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+        try:
+            df = pd.read_csv(dataset.file_path)
+            preview_rows = df.head(rows).fillna("").to_dict(orient="records")
+            return {
+                "dataset_id": dataset_id,
+                "columns": list(df.columns),
+                "rows": preview_rows,
+                "total_rows": len(df),
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    async def delete_dataset(self, dataset_id: str) -> dict:
+        """Delete a dataset, its columns, and the uploaded file."""
+        dataset = await self.get_dataset(dataset_id)
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+        # Delete columns
+        await self.db.execute(
+            delete(DatasetColumn).where(DatasetColumn.dataset_id == dataset_id)
+        )
+        # Delete file
+        with contextlib.suppress(OSError):
+            os.remove(dataset.file_path)
+        # Delete record
+        await self.db.delete(dataset)
+        await self.db.commit()
+        return {"deleted": dataset_id, "name": dataset.name}
 
     def _generate_profile(self, df: pd.DataFrame) -> dict:
         columns = []

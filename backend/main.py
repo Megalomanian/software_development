@@ -11,6 +11,7 @@ from backend.api.deployments import router as deployment_router
 from backend.api.experiments import router as experiment_router
 from backend.api.models import router as model_router
 from backend.api.monitoring import router as monitoring_router
+from backend.api.system import router as system_router
 from backend.core.config import settings
 
 
@@ -36,6 +37,7 @@ app.include_router(experiment_router, prefix="/api/experiments", tags=["experime
 app.include_router(model_router, prefix="/api/models", tags=["models"])
 app.include_router(deployment_router, prefix="/api/deployments", tags=["deployments"])
 app.include_router(monitoring_router, prefix="/api/monitoring", tags=["monitoring"])
+app.include_router(system_router, prefix="/api/system", tags=["system"])
 
 
 @app.get("/api/health")

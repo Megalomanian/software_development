@@ -11,6 +11,7 @@ from ml_platform.deployments import DeploymentsAPI
 from ml_platform.experiments import ExperimentsAPI
 from ml_platform.models import ModelsAPI
 from ml_platform.monitoring import MonitoringAPI
+from ml_platform.system import SystemAPI
 
 
 class Client:
@@ -34,6 +35,7 @@ class Client:
         self.models = ModelsAPI(self._client)
         self.deployments = DeploymentsAPI(self._client)
         self.monitoring = MonitoringAPI(self._client)
+        self.system = SystemAPI(self._client)
 
     async def health(self) -> dict[str, Any]:
         """Check API health."""
