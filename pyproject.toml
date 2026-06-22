@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ml-platform"
+version = "0.1.0"
+description = "Low-code MLOps platform for business analysts"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "boto3>=1.36.0",
+    "mlflow>=2.19.0",
+    "temporalio>=1.9.0",
+    "prometheus-fastapi-instrumentator>=7.0.0",
+    "pandas>=2.2.0",
+    "scikit-learn>=1.6.0",
+    "evidently>=0.5.0",
+    "optuna>=4.1.0",
+    "python-multipart>=0.0.18",
+    "minio>=7.2.0",
+    "clickhouse-connect>=0.7.0",
+    "httpx>=0.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+    "ruff>=0.9.0",
+    "mypy>=1.13.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["backend/tests"]
+
+[dependency-groups]
+dev = [
+    "aiosqlite>=0.22.1",
+    "greenlet>=3.5.2",
+]
