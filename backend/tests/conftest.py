@@ -16,6 +16,9 @@ from backend.api.monitoring import router as monitoring_router
 from backend.core.dependencies import get_db
 from backend.models_db.base import Base
 
+# Ensure all ORM models are registered before create_all
+from backend.models_db.user import User  # noqa: F401
+
 
 def _create_test_app() -> FastAPI:
     """Create a FastAPI app without Prometheus instrumentator for testing."""

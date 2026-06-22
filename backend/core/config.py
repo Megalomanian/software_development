@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # Ray
     ray_address: str = "auto"
 
+    # Auth (JWT)
+    jwt_secret: str = "change-me-in-production-use-a-strong-random-key"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 1440  # 24 hours
+
     # App
     app_name: str = "ML Platform"
     debug: bool = False

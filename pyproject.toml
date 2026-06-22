@@ -27,6 +27,8 @@ dependencies = [
     "minio>=7.2.0",
     "clickhouse-connect>=0.7.0",
     "httpx>=0.28.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
 ]
 
 [tool.hatch.build.targets.wheel]

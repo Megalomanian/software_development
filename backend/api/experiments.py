@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.dependencies import get_db
 from backend.models_db.experiment import Experiment
+from backend.services.training_queue import get_queue
 from backend.services.training_service import TrainingService
 
 router = APIRouter()
@@ -94,3 +95,22 @@ async def compare_experiments(
         }
         for e in experiments
     ]
+
+
+@router.post("/{experiment_id}/enqueue")
+async def enqueue_experiment(experiment_id: str, db: AsyncSession = Depends(get_db)):
+    """Add an experiment to the training queue."""
+    service = TrainingService(db)
+    experiment = await service.get_experiment(experiment_id)
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    queue = get_queue()
+    return await queue.enqueue(experiment_id, experiment.name)
+
+
+@router.get("/queue/status")
+async def queue_status():
+    """Get the training queue status."""
+    return get_queue().get_status()
+
