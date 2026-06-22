@@ -8,8 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import mlflow
-
 
 class RayServeManager:
     """Handles deploying/stopping models on Ray Serve."""

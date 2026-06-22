@@ -84,7 +84,7 @@ async def test_get_data_drift_insufficient_data(client: AsyncClient, deployment_
     data = resp.json()
     # Without inference logs, should report insufficient data or no drift
     if "message" in data:
-        assert "Not enough" in data["message"] or data["drift_detected"] == False
+        assert "Not enough" in data["message"] or not data["drift_detected"]
 
 
 @pytest.mark.asyncio

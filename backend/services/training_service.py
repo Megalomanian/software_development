@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import uuid
 from typing import Any
 
@@ -10,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
 from backend.models_db.dataset import Dataset
-from backend.models_db.experiment import Experiment, PipelineEdge, PipelineNode
+from backend.models_db.experiment import Experiment
 
 mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 
@@ -34,32 +33,9 @@ class TrainingService:
             dataset_id=data.get("dataset_id"),
             target_column=data.get("target_column", "target"),
             problem_type=data.get("problem_type", "classification"),
-            pipeline_definition=json.dumps(data.get("pipeline", {})),
+            description=data.get("description"),
         )
         self.db.add(experiment)
-        await self.db.flush()
-
-        for i, node in enumerate(data.get("nodes", [])):
-            self.db.add(
-                PipelineNode(
-                    experiment_id=str(experiment.id),
-                    node_type=node.get("type", "data_source"),
-                    label=node.get("label", "Node"),
-                    config=json.dumps(node.get("config", {})),
-                    position_x=node.get("x", i * 200),
-                    position_y=node.get("y", 100),
-                )
-            )
-
-        for edge in data.get("edges", []):
-            self.db.add(
-                PipelineEdge(
-                    experiment_id=str(experiment.id),
-                    source_node_id=edge.get("source", ""),
-                    target_node_id=edge.get("target", ""),
-                )
-            )
-
         await self.db.commit()
         return experiment
 
@@ -78,7 +54,6 @@ class TrainingService:
         with mlflow.start_run() as run:
             mlflow.log_param("problem_type", experiment.problem_type)
             mlflow.log_param("target_column", experiment.target_column)
-            mlflow.log_param("pipeline", experiment.pipeline_definition or "{}")
             mlflow.log_metric("accuracy", 0.0)
 
             experiment.mlflow_run_id = run.info.run_id
@@ -95,9 +70,8 @@ class TrainingService:
         """Execute a pipeline against real data with sklearn, then log to MLflow."""
         import pandas as pd
         from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-        from sklearn.linear_model import LogisticRegression, LinearRegression
         from sklearn.metrics import accuracy_score, mean_squared_error, r2_score
-        from sklearn.preprocessing import LabelEncoder, StandardScaler
+        from sklearn.preprocessing import LabelEncoder
 
         experiment = await self.get_experiment(experiment_id)
         if not experiment:

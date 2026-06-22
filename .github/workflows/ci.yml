@@ -16,22 +16,43 @@ jobs:
           version: "0.9.17"
       - name: Install deps
         run: uv sync --index-url https://pypi.tuna.tsinghua.edu.cn/simple
-      - name: Lint
+      - name: Lint backend
         run: uv run ruff check backend/
+      - name: Lint SDK
+        run: uv run ruff check sdk/
       - name: Test
         run: uv run pytest backend/tests/ -v
 
-  frontend:
+  sdk:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mlp
+          POSTGRES_PASSWORD: mlp
+          POSTGRES_DB: mlp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mlp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: astral-sh/setup-uv@v5
         with:
-          node-version: "22"
-      - run: npm install
-      - run: npx tsc --noEmit
-      - run: npx next lint
-      - run: npx next build
+          version: "0.9.17"
+      - name: Install SDK deps
+        run: cd sdk && uv sync --index-url https://pypi.tuna.tsinghua.edu.cn/simple
+      - name: Lint SDK
+        run: cd sdk && uv run ruff check ml_platform/
+      - name: Start API server
+        run: |
+          uv sync --index-url https://pypi.tuna.tsinghua.edu.cn/simple
+          uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000 &
+          sleep 5
+      - name: Run SDK integration tests
+        run: cd sdk && uv run pytest tests/ -v

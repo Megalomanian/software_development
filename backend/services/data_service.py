@@ -10,7 +10,6 @@ from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.config import settings
 from backend.models_db.dataset import Dataset, DatasetColumn
 
 

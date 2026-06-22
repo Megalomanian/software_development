@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from datetime import timedelta
-
 from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
     import mlflow
-    from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-    from sklearn.linear_model import LogisticRegression, LinearRegression
-    from sklearn.metrics import accuracy_score, mean_squared_error, r2_score
     import pandas as pd
+    from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+    from sklearn.linear_model import LinearRegression, LogisticRegression
+    from sklearn.metrics import accuracy_score, mean_squared_error, r2_score
 
 
 @workflow.defn

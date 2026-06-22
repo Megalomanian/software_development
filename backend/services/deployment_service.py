@@ -4,7 +4,9 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.config import settings
 from backend.models_db.model import Deployment, ModelVersion
+from backend.services.local_serving import LocalModelRegistry
 
 
 class DeploymentService:
@@ -36,29 +38,41 @@ class DeploymentService:
             model_version_id=model_id,
             replicas=data.get("replicas", 1),
             ray_serve_app=deployment_name,
-            endpoint_url=f"http://localhost:8000/{deployment_name}",
+            endpoint_url=f"http://localhost:8000/api/deployments/predict/{deployment_name}",
             status="deploying",
         )
         self.db.add(deployment)
-        await self.db.commit()
+        await self.db.flush()
 
-        # Attempt Ray Serve deploy
-        try:
-            from backend.services.ray_serve_manager import RayServeManager
+        # Try local serving first — no external dependency
+        mlflow_run_id = model.mlflow_model_uri or ""
+        result = LocalModelRegistry.deploy(
+            name=deployment_name,
+            mlflow_run_id=mlflow_run_id,
+            tracking_uri=settings.mlflow_tracking_uri,
+        )
 
-            mgr = RayServeManager()
-            result = mgr.deploy_model(
-                model_uri=model.mlflow_model_uri or model.artifact_path or "",
-                deployment_name=deployment_name,
-                num_replicas=deployment.replicas,
-            )
-            if result["status"] == "running":
-                deployment.status = "running"
-                deployment.endpoint_url = result.get("endpoint")
-            else:
+        if result["status"] == "running":
+            deployment.status = "running"
+            deployment.endpoint_url = f"http://localhost:8000/api/deployments/{deployment.id}/predict"
+        else:
+            # Local serving failed; try Ray Serve as fallback
+            try:
+                from backend.services.ray_serve_manager import RayServeManager
+
+                mgr = RayServeManager()
+                ray_result = mgr.deploy_model(
+                    model_uri=model.mlflow_model_uri or model.artifact_path or "",
+                    deployment_name=deployment_name,
+                    num_replicas=deployment.replicas,
+                )
+                if ray_result["status"] == "running":
+                    deployment.status = "running"
+                    deployment.endpoint_url = ray_result.get("endpoint")
+                else:
+                    deployment.status = "failed"
+            except Exception:
                 deployment.status = "failed"
-        except Exception:
-            deployment.status = "failed_no_ray"
 
         await self.db.commit()
         return deployment
@@ -74,11 +88,15 @@ class DeploymentService:
         if not deployment:
             raise ValueError(f"Deployment {deployment_id} not found")
 
+        # Stop local serving
+        name = deployment.ray_serve_app or deployment.name
+        LocalModelRegistry.stop(name)
+
+        # Also try Ray Serve if it was used
         try:
             from backend.services.ray_serve_manager import RayServeManager
 
-            mgr = RayServeManager()
-            mgr.stop_deployment(deployment.ray_serve_app or deployment.name)
+            RayServeManager().stop_deployment(name)
         except Exception:
             pass
 
@@ -94,10 +112,16 @@ class DeploymentService:
         if deployment.status != "running":
             return {"error": "Deployment is not running"}
 
+        name = deployment.ray_serve_app or deployment.name
+
+        # Try local serving first
+        if LocalModelRegistry.is_running(name):
+            return LocalModelRegistry.predict(name, data)
+
+        # Fall back to Ray Serve
         try:
             from backend.services.ray_serve_manager import RayServeManager
 
-            mgr = RayServeManager()
-            return mgr.predict(deployment.ray_serve_app or deployment.name, data)
+            return RayServeManager().predict(name, data)
         except Exception as e:
             return {"error": str(e)}

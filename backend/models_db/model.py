@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.models_db.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from backend.models_db.experiment import Experiment
+    pass
 
 
 class ModelVersion(Base, TimestampMixin):

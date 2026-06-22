@@ -1,15 +1,9 @@
 from __future__ import annotations
 
-import json
-import uuid
-from typing import Any
-
-import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.dependencies import get_db
-from backend.models_db.dataset import Dataset, DatasetColumn
 from backend.services.data_service import DataService
 
 router = APIRouter()

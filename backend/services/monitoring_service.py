@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.config import settings
-from backend.models_db.model import Deployment, InferenceLog
+from backend.models_db.model import InferenceLog
 
 
 class MonitoringService:
@@ -43,7 +42,7 @@ class MonitoringService:
         )
         error_count = error_result.scalar() or 0
 
-        seconds = max((datetime.now(timezone.utc) - since).total_seconds(), 1)
+        seconds = max((datetime.now(UTC) - since).total_seconds(), 1)
         error_rate = error_count / max(request_count, 1)
         throughput = request_count / seconds
 
@@ -85,10 +84,8 @@ class MonitoringService:
             requests = []
             for log in logs:
                 if log.request_data:
-                    try:
+                    with contextlib.suppress(json.JSONDecodeError):
                         requests.append(json.loads(log.request_data))
-                    except json.JSONDecodeError:
-                        pass
 
             if len(requests) < 50 or not logs[0].deployment_id:
                 return {
@@ -153,7 +150,7 @@ class MonitoringService:
 
     @staticmethod
     def _parse_time_range(time_range: str) -> datetime:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ranges = {
             "5m": timedelta(minutes=5),
             "15m": timedelta(minutes=15),
