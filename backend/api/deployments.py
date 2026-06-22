@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.dependencies import get_db
+from backend.models_db.model import Deployment
 from backend.services.deployment_service import DeploymentService
 
 router = APIRouter()
@@ -42,3 +44,24 @@ async def stop_deployment(deployment_id: str, db: AsyncSession = Depends(get_db)
 async def predict(deployment_id: str, data: dict, db: AsyncSession = Depends(get_db)):
     service = DeploymentService(db)
     return await service.predict(deployment_id, data)
+
+
+@router.delete("/{deployment_id}")
+async def delete_deployment(deployment_id: str, db: AsyncSession = Depends(get_db)):
+    deployment = await db.scalar(
+        select(Deployment).where(Deployment.id == deployment_id)
+    )
+    if not deployment:
+        raise HTTPException(status_code=404, detail="Deployment not found")
+
+    # Stop the model if running
+    try:
+        from backend.services.deployment_service import DeploymentService
+        svc = DeploymentService(db)
+        await svc.stop_deployment(deployment_id)
+    except Exception:
+        pass
+
+    await db.delete(deployment)
+    await db.commit()
+    return {"deleted": deployment_id, "name": deployment.name}
