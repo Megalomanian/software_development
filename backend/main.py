@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
+from backend.api.auth import router as auth_router
 from backend.api.data import router as data_router
 from backend.api.deployments import router as deployment_router
 from backend.api.experiments import router as experiment_router
@@ -13,10 +14,14 @@ from backend.api.models import router as model_router
 from backend.api.monitoring import router as monitoring_router
 from backend.api.system import router as system_router
 from backend.core.config import settings
+from backend.core.dependencies import async_session
+from backend.services.training_queue import get_queue
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Configure the training queue with the app's session factory
+    get_queue().configure(async_session)
     yield
 
 
@@ -32,6 +37,7 @@ app.add_middleware(
 
 Instrumentator().instrument(app).expose(app)
 
+app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(data_router, prefix="/api/data", tags=["data"])
 app.include_router(experiment_router, prefix="/api/experiments", tags=["experiments"])
 app.include_router(model_router, prefix="/api/models", tags=["models"])
