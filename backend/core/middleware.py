@@ -11,7 +11,10 @@ class InferenceLoggingMiddleware(BaseHTTPMiddleware):
     """Logs inference request latency and errors for monitoring."""
 
     async def dispatch(self, request: Request, call_next):
-        if not request.url.path.startswith("/api/deployments/") or not request.url.path.endswith("/predict"):
+        is_predict = request.url.path.startswith("/api/deployments/") and request.url.path.endswith(
+            "/predict"
+        )
+        if not is_predict:
             return await call_next(request)
 
         start = time.time()

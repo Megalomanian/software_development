@@ -32,11 +32,7 @@ async def test_create_experiment(client: AsyncClient, dataset_id: str):
             "dataset_id": dataset_id,
             "target_column": "target",
             "problem_type": "classification",
-            "nodes": [
-                {"type": "data_source", "label": "数据源", "config": {"dataset_id": dataset_id}},
-                {"type": "model_training", "label": "训练", "config": {"model_type": "random_forest"}},
-            ],
-            "edges": [],
+            "description": "Test experiment for classification",
         },
     )
     assert resp.status_code == 200
@@ -56,8 +52,6 @@ async def test_list_experiments(client: AsyncClient, dataset_id: str):
             "dataset_id": dataset_id,
             "target_column": "target",
             "problem_type": "classification",
-            "nodes": [],
-            "edges": [],
         },
     )
     await client.post(
@@ -67,8 +61,6 @@ async def test_list_experiments(client: AsyncClient, dataset_id: str):
             "dataset_id": dataset_id,
             "target_column": "target",
             "problem_type": "regression",
-            "nodes": [],
-            "edges": [],
         },
     )
     resp = await client.get("/api/experiments/")
@@ -86,8 +78,6 @@ async def test_get_experiment(client: AsyncClient, dataset_id: str):
             "dataset_id": dataset_id,
             "target_column": "target",
             "problem_type": "classification",
-            "nodes": [],
-            "edges": [],
         },
     )
     exp_id = create_resp.json()["id"]
@@ -120,8 +110,6 @@ async def test_run_experiment(client: AsyncClient, dataset_id: str):
             "dataset_id": dataset_id,
             "target_column": "target",
             "problem_type": "classification",
-            "nodes": [],
-            "edges": [],
         },
     )
     exp_id = create_resp.json()["id"]
@@ -150,8 +138,6 @@ async def test_get_mlflow_metrics(client: AsyncClient, dataset_id: str):
             "dataset_id": dataset_id,
             "target_column": "target",
             "problem_type": "classification",
-            "nodes": [],
-            "edges": [],
         },
     )
     exp_id = create_resp.json()["id"]
@@ -179,25 +165,18 @@ async def test_create_experiment_without_name(client: AsyncClient, dataset_id: s
 
 
 @pytest.mark.asyncio
-async def test_create_experiment_with_pipeline_edges(client: AsyncClient, dataset_id: str):
+async def test_create_experiment_with_description(client: AsyncClient, dataset_id: str):
     resp = await client.post(
         "/api/experiments/",
         json={
-            "name": "pipeline-exp",
+            "name": "desc-exp",
             "dataset_id": dataset_id,
             "target_column": "target",
-            "problem_type": "classification",
-            "nodes": [
-                {"type": "data_source", "label": "数据源", "config": {}},
-                {"type": "model_training", "label": "训练", "config": {"model_type": "logistic_regression"}},
-                {"type": "evaluation", "label": "评估", "config": {"metrics": ["accuracy", "f1"]}},
-            ],
-            "edges": [
-                {"source": "node_1", "target": "node_2"},
-                {"source": "node_2", "target": "node_3"},
-            ],
+            "problem_type": "regression",
+            "description": "A regression experiment with random forest",
         },
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert data["name"] == "pipeline-exp"
+    assert data["name"] == "desc-exp"
+    assert data["description"] == "A regression experiment with random forest"

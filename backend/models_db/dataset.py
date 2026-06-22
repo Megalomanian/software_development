@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, Integer, String, Text
+from sqlalchemy import Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models_db.base import Base, TimestampMixin
@@ -25,7 +24,7 @@ class Dataset(Base, TimestampMixin):
     profile: Mapped[str | None] = mapped_column(Text, nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
 
-    experiments: Mapped[list["Experiment"]] = relationship(back_populates="dataset")
+    experiments: Mapped[list[Experiment]] = relationship(back_populates="dataset")
 
 
 class DatasetColumn(Base, TimestampMixin):

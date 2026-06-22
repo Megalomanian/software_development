@@ -38,6 +38,12 @@ async def run_experiment(experiment_id: str, db: AsyncSession = Depends(get_db))
     return await service.run_experiment(experiment_id)
 
 
+@router.post("/{experiment_id}/run-sklearn")
+async def run_experiment_sklearn(experiment_id: str, db: AsyncSession = Depends(get_db)):
+    service = TrainingService(db)
+    return await service.run_experiment_sklearn(experiment_id)
+
+
 @router.get("/{experiment_id}/mlflow-metrics")
 async def get_mlflow_metrics(experiment_id: str, db: AsyncSession = Depends(get_db)):
     service = TrainingService(db)
