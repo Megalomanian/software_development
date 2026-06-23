@@ -36,13 +36,18 @@ async def queue_client(db_session):
     await TrainingQueue.reset()
 
     # Create test user
-    user = User(username="queue_test", email="queue@test.com", hashed_password=hash_password("test"))
+    user = User(
+        username="queue_test", email="queue@test.com",
+        hashed_password=hash_password("test"),
+    )
     db_session.add(user)
     await db_session.flush()
     token = create_access_token({"sub": str(user.id)})
 
     app = FastAPI(title="Queue Test")
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    app.add_middleware(
+        CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+    )
     app.include_router(auth_router, prefix="/api/auth")
     app.include_router(data_router, prefix="/api/data")
     app.include_router(experiment_router, prefix="/api/experiments")
@@ -69,7 +74,8 @@ async def _upload_and_create_exp(client: AsyncClient, name: str, target: str = "
     )
     ds_id = resp.json()["id"]
     resp = await client.post("/api/experiments/", json={
-        "name": name, "dataset_id": ds_id, "target_column": target, "problem_type": "classification",
+        "name": name, "dataset_id": ds_id,
+        "target_column": target, "problem_type": "classification",
     })
     return resp.json()["id"]
 

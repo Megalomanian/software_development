@@ -18,7 +18,9 @@ async def auth_client(db_session):
     from backend.core.dependencies import get_db
 
     app = FastAPI(title="Auth Test")
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    app.add_middleware(
+        CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+    )
     app.include_router(auth_router, prefix="/api/auth")
     app.include_router(data_router, prefix="/api/data")
     app.include_router(experiment_router, prefix="/api/experiments")
