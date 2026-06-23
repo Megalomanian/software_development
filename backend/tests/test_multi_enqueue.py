@@ -88,30 +88,26 @@ async def _upload_csv(client: AsyncClient, filename: str, csv_content: bytes) ->
     return resp.json()["id"]
 
 
-async def _create_and_enqueue(
-    client: AsyncClient,
-    name: str,
-    dataset_id: str,
-    target: str,
-    problem_type: str,
+async def _create_exp(
+    client: AsyncClient, name: str, ds_id: str, target: str = "target",
+    problem_type: str = "classification",
 ) -> str:
-    """Create an experiment and enqueue it. Returns experiment_id."""
-    resp = await client.post(
-        "/api/experiments/",
-        json={
-            "name": name,
-            "dataset_id": dataset_id,
-            "target_column": target,
-            "problem_type": problem_type,
-        },
-    )
+    """Create an experiment and return its ID."""
+    resp = await client.post("/api/experiments/", json={
+        "name": name, "dataset_id": ds_id,
+        "target_column": target, "problem_type": problem_type,
+    })
     assert resp.status_code == 200, resp.text
-    exp_id = resp.json()["id"]
+    return resp.json()["id"]
 
+
+async def _enqueue(client: AsyncClient, exp_id: str) -> dict:
+    """Enqueue an experiment and return the response."""
     resp = await client.post(f"/api/experiments/{exp_id}/enqueue")
     assert resp.status_code == 200, resp.text
-    assert resp.json()["status"] == "queued"
-    return exp_id
+    data = resp.json()
+    assert data["status"] == "queued"
+    return data
 
 
 @pytest.mark.asyncio
@@ -126,16 +122,13 @@ async def test_multi_enqueue_fifo_order(multi_client: AsyncClient, db_session):
 
     names = ["fifo-1", "fifo-2", "fifo-3", "fifo-4", "fifo-5"]
     exp_ids = []
-    for i, name in enumerate(names):
-        eid = await _create_and_enqueue(
-            multi_client, name, ds_id, "target", "classification"
-        )
+    for name in names:
+        eid = await _create_exp(multi_client, name, ds_id)
         exp_ids.append(eid)
-        # Check position in response
-        resp = await multi_client.get("/api/experiments/queue/status")
-        jobs = resp.json()["jobs"]
-        # Position values should be sequential and match insertion order
-        assert jobs[i]["experiment_name"] == name, f"Job {i} should be {name}"
+
+    # Enqueue all at once
+    for eid in exp_ids:
+        await _enqueue(multi_client, eid)
 
     # Final queue check — all 5 entries present in FIFO order
     resp = await multi_client.get("/api/experiments/queue/status")
@@ -143,7 +136,6 @@ async def test_multi_enqueue_fifo_order(multi_client: AsyncClient, db_session):
     assert data["total"] == 5
     job_names = [j["experiment_name"] for j in data["jobs"]]
     assert job_names == names  # FIFO order preserved
-    # Positions should be 1-5
     positions = [j["position"] for j in data["jobs"]]
     assert positions == [1, 2, 3, 4, 5]
 
@@ -158,9 +150,7 @@ async def test_multi_enqueue_all_process(multi_client: AsyncClient, db_session):
     """Enqueue 3 experiments and wait for all to complete processing."""
     from backend.services.training_queue import TrainingQueue
 
-    # Configure the queue with test DB session factory
-    # Use expire_on_commit=True so the test session sees worker-committed changes
-    session_factory = async_sessionmaker(db_session.bind, expire_on_commit=True)
+    session_factory = async_sessionmaker(db_session.bind, expire_on_commit=False)
     queue = TrainingQueue()
     queue.configure(session_factory)
 
@@ -176,13 +166,17 @@ async def test_multi_enqueue_all_process(multi_client: AsyncClient, db_session):
     ds2 = await _upload_csv(multi_client, "batch-reg.csv", _csv_reg)
     ds3 = await _upload_csv(multi_client, "batch-cls2.csv", _csv_cls2)
 
-    # Create and enqueue all three
-    exp1 = await _create_and_enqueue(multi_client, "batch-cls", ds1, "target", "classification")
-    exp2 = await _create_and_enqueue(multi_client, "batch-reg", ds2, "score", "regression")
-    exp3 = await _create_and_enqueue(multi_client, "batch-cls2", ds3, "label", "classification")
+    # Create all experiments first, then enqueue
+    exp1 = await _create_exp(multi_client, "batch-cls", ds1)
+    exp2 = await _create_exp(multi_client, "batch-reg", ds2, "score", "regression")
+    exp3 = await _create_exp(multi_client, "batch-cls2", ds3, "label")
 
     exp_ids = [exp1, exp2, exp3]
     exp_names = ["batch-cls", "batch-reg", "batch-cls2"]
+
+    # Enqueue all at once
+    for eid in exp_ids:
+        await _enqueue(multi_client, eid)
 
     # Monitor queue until all done (max 60s)
     all_done = False
@@ -276,8 +270,12 @@ async def test_multi_enqueue_mixed_with_auth(multi_client: AsyncClient, db_sessi
     ds_id = await _upload_csv(multi_client, "auth-test.csv", csv)
 
     # Create & enqueue 2 experiments
-    exp_a = await _create_and_enqueue(multi_client, "auth-exp-a", ds_id, "y", "regression")
-    exp_b = await _create_and_enqueue(multi_client, "auth-exp-b", ds_id, "y", "regression")
+    exp_a = await _create_exp(multi_client, "auth-exp-a", ds_id, "y", "regression")
+    exp_b = await _create_exp(multi_client, "auth-exp-b", ds_id, "y", "regression")
+
+    # Enqueue both
+    await _enqueue(multi_client, exp_a)
+    await _enqueue(multi_client, exp_b)
 
     # Wait for processing
     for _ in range(60):

@@ -57,8 +57,31 @@ async def run_experiment_sklearn(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Enqueue experiment for sklearn training via FIFO queue.
+
+    Returns immediately with queue position. Training runs asynchronously.
+    Monitor progress with GET /api/experiments/queue/status.
+    """
     service = TrainingService(db)
-    return await service.run_experiment_sklearn(experiment_id)
+    experiment = await service.get_experiment(experiment_id)
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    queue = get_queue()
+    result = await queue.enqueue(
+        experiment_id, experiment.name,
+        username=current_user.username,
+    )
+    return {
+        "experiment_id": experiment_id,
+        "experiment_name": experiment.name,
+        "status": "queued",
+        "position": result["position"],
+        "message": (
+            f"Experiment '{experiment.name}' is #{result['position']} in queue. "
+            "Check /api/experiments/queue/status for progress."
+        ),
+    }
 
 
 @router.get("/{experiment_id}/mlflow-metrics")
@@ -128,7 +151,10 @@ async def enqueue_experiment(
         raise HTTPException(status_code=404, detail="Experiment not found")
 
     queue = get_queue()
-    return await queue.enqueue(experiment_id, experiment.name)
+    return await queue.enqueue(
+        experiment_id, experiment.name,
+        username=current_user.username,
+    )
 
 
 @router.get("/queue/status")

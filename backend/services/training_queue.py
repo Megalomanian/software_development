@@ -34,6 +34,8 @@ class TrainingJob:
     status: JobStatus = JobStatus.QUEUED
     added_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     error: str | None = None
+    username: str | None = None
+    mlflow_run_id: str | None = None
 
 
 class TrainingQueue:
@@ -54,16 +56,20 @@ class TrainingQueue:
         """Set the DB session factory (call once at startup)."""
         self._session_factory = session_factory
 
-    async def enqueue(self, experiment_id: str, experiment_name: str) -> dict:
+    async def enqueue(
+        self, experiment_id: str, experiment_name: str,
+        username: str | None = None,
+    ) -> dict:
         """Add a training job to the queue."""
         async with self._lock:
             job = TrainingJob(
                 experiment_id=experiment_id,
                 experiment_name=experiment_name,
                 position=len(self._queue) + 1,
+                username=username,
             )
             self._queue.append(job)
-            logger.info("Enqueued %s (position %d)", experiment_name, job.position)
+            logger.info("Enqueued %s (position %d, user=%s)", experiment_name, job.position, username)
             self._ensure_worker()
         return {
             "experiment_id": experiment_id,
@@ -72,7 +78,9 @@ class TrainingQueue:
         }
 
     def get_status(self) -> dict:
-        """Get the full queue status."""
+        """Get the full queue status with server resource info."""
+        import psutil
+
         jobs = [
             {
                 "experiment_id": j.experiment_id,
@@ -81,11 +89,18 @@ class TrainingQueue:
                 "status": j.status,
                 "added_at": str(j.added_at),
                 "error": j.error,
+                "username": j.username or "-",
+                "mlflow_run_id": j.mlflow_run_id,
             }
             for j in self._queue
         ]
         running = next((j for j in jobs if j["status"] == JobStatus.RUNNING), None)
         pending = [j for j in jobs if j["status"] == JobStatus.QUEUED]
+
+        # System resource info
+        mem = psutil.virtual_memory()
+        cpu = psutil.cpu_percent(interval=0.1)
+
         return {
             "total": len(self._queue),
             "pending": len(pending),
@@ -93,6 +108,15 @@ class TrainingQueue:
             "completed": len([j for j in jobs if j["status"] == JobStatus.COMPLETED]),
             "failed": len([j for j in jobs if j["status"] == JobStatus.FAILED]),
             "jobs": jobs,
+            "server": {
+                "cpu_percent": cpu,
+                "memory": {
+                    "total_gb": round(mem.total / (1024**3), 1),
+                    "used_gb": round(mem.used / (1024**3), 1),
+                    "available_gb": round(mem.available / (1024**3), 1),
+                    "percent": mem.percent,
+                },
+            },
         }
 
     def _ensure_worker(self) -> None:

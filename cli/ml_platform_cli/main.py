@@ -436,14 +436,17 @@ def exp_run(
 def exp_run_sklearn(
     experiment_id: str = typer.Argument(..., help="Experiment UUID"),
 ):
-    """Run sklearn training (RandomForest) with real data."""
+    """Enqueue experiment for sklearn training (FIFO queue, async)."""
     async def _run():
         c = _require_auth()
         try:
-            with console.status("[bold]Training with sklearn...[/bold]"):
-                result = await c.experiments.run_sklearn(experiment_id)
-            console.print(f"[green]✓[/green] {result['status']}")
-            console.print(f"  MLflow Run: [dim]{result.get('mlflow_run_id', '?')}[/dim]")
+            # run-sklearn now enqueues instead of executing directly
+            result = await c.experiments.run_sklearn(experiment_id)
+            pos = result.get("position", "?")
+            console.print(
+                f"[green]✓[/green] Enqueued — position [bold]#{pos}[/bold] in training queue"
+            )
+            console.print(f"  Monitor: [dim]mlp queue watch[/dim]")
         finally:
             await c.close()
     asyncio.run(_run())
@@ -551,10 +554,16 @@ queue_app = typer.Typer(help="Training job queue — status, live monitoring.")
 app.add_typer(queue_app, name="queue")
 
 
-def _render_queue(data: dict) -> Table:
-    """Render queue status as a rich Table."""
+def _render_queue(data: dict) -> Panel:
+    """Render queue status with server resource info."""
+    # Queue table
     table = Table(title="Training Queue", header_style="bold cyan", border_style="grey50")
-    table.add_column("Pos"); table.add_column("Experiment"); table.add_column("Status"); table.add_column("Error")
+    table.add_column("Pos")
+    table.add_column("Experiment")
+    table.add_column("Exp ID")
+    table.add_column("User")
+    table.add_column("MLflow Run")
+    table.add_column("Status")
 
     status_style = {
         "completed": "[green]completed[/green]",
@@ -564,12 +573,17 @@ def _render_queue(data: dict) -> Table:
     }
     for j in data.get("jobs", []):
         s = status_style.get(j["status"], j["status"])
-        err = j.get("error", "") or ""
-        if err and len(err) > 60:
-            err = err[:57] + "..."
-        table.add_row(str(j["position"]), j["experiment_name"], s, err)
+        exp_id = j.get("experiment_id", "")[:8] or "-"
+        mlflow_id = (j.get("mlflow_run_id") or "")[:8] or "-"
+        table.add_row(
+            str(j["position"]),
+            j["experiment_name"],
+            exp_id,
+            j.get("username", "-"),
+            mlflow_id,
+            s,
+        )
 
-    # Summary footer
     total = data["total"]
     pending = data["pending"]
     completed = data["completed"]
@@ -585,7 +599,24 @@ def _render_queue(data: dict) -> Table:
         f"[red]failed:[/red] {failed}"
     )
     table.caption = summary
-    return table
+
+    # Server info
+    server = data.get("server", {})
+    if server:
+        mem = server.get("memory", {})
+        cpu = server.get("cpu_percent", 0)
+        cpu_color = "red" if cpu > 80 else "yellow" if cpu > 50 else "green"
+        mem_color = "red" if mem.get("percent", 0) > 80 else "yellow" if mem.get("percent", 0) > 50 else "green"
+
+        info = (
+            f"🖥  CPU: [{cpu_color}]{cpu:.0f}%[/{cpu_color}]  "
+            f"💾 RAM: [{mem_color}]{mem.get('used_gb', '?')}/{mem.get('total_gb', '?')} GB "
+            f"({mem.get('percent', 0):.0f}%)[/{mem_color}]  "
+            f"🆓 avail: {mem.get('available_gb', '?')} GB"
+        )
+        return Panel(table, title="Queue Status", subtitle=info, subtitle_align="left")
+
+    return Panel(table, title="Queue Status")
 
 
 @queue_app.command("status")

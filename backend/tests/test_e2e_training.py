@@ -1,18 +1,20 @@
 """End-to-end training test with small sample data.
 
 Tests the full pipeline: data upload → experiment creation →
-sklearn training → result verification — all with real computation.
-Uses local MLflow file store so no server is needed.
+sklearn training (via queue) → result verification —
+all with real computation.
 """
 
 from __future__ import annotations
 
+import asyncio
 import io
 import tempfile
 
 import mlflow
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 
 @pytest.fixture(autouse=True)
@@ -22,6 +24,7 @@ def _use_local_mlflow():
     mlflow.set_tracking_uri(f"sqlite:///{tmp}/mlflow.db")
     yield
     import shutil
+
     shutil.rmtree(tmp, ignore_errors=True)
 
 
@@ -39,6 +42,9 @@ async def client(db_session):
     from backend.core.auth import create_access_token, hash_password
     from backend.core.dependencies import get_db
     from backend.models_db.user import User
+    from backend.services.training_queue import TrainingQueue
+
+    await TrainingQueue.reset()
 
     # Create test user for auth
     user = User(
@@ -48,6 +54,9 @@ async def client(db_session):
     db_session.add(user)
     await db_session.flush()
     token = create_access_token({"sub": str(user.id)})
+
+    # Configure queue worker with test DB
+    TrainingQueue().configure(async_sessionmaker(db_session.bind, expire_on_commit=False))
 
     app = FastAPI(title="E2E Test")
     app.add_middleware(
@@ -70,11 +79,23 @@ async def client(db_session):
         headers={"Authorization": f"Bearer {token}"},
     ) as c:
         yield c
+    await TrainingQueue.reset()
+
+
+async def _wait_for_queue(client: AsyncClient, expected: int, timeout: int = 30) -> dict:
+    """Wait for the queue to process expected number of jobs."""
+    for _ in range(timeout):
+        await asyncio.sleep(1)
+        resp = await client.get("/api/experiments/queue/status")
+        status = resp.json()
+        if status["pending"] == 0 and status["running"] is None:
+            return status
+    return status
 
 
 @pytest.mark.asyncio
 async def test_e2e_classification_training(client):
-    """End-to-end: upload CSV → create experiment → run sklearn → verify results."""
+    """End-to-end: upload CSV → create experiment → enqueue → verify results."""
     csv_data = (
         b"f1,f2,f3,f4,target\n"
         b"5.1,3.5,1.4,0.2,0\n"
@@ -109,11 +130,21 @@ async def test_e2e_classification_training(client):
     assert resp.status_code == 200
     experiment = resp.json()
 
+    # run-sklearn now enqueues (async via FIFO queue)
     resp = await client.post(f"/api/experiments/{experiment['id']}/run-sklearn")
     assert resp.status_code == 200
     result = resp.json()
-    assert result["status"] == "completed"
-    assert "mlflow_run_id" in result
+    assert result["status"] == "queued"
+    assert "position" in result
+
+    # Wait for queue worker to finish
+    await _wait_for_queue(client, expected=1)
+
+    # Verify experiment completed
+    resp = await client.get(f"/api/experiments/{experiment['id']}")
+    exp = resp.json()
+    assert exp["status"] == "completed"
+    assert exp["mlflow_run_id"] is not None
 
     resp = await client.get(f"/api/experiments/{experiment['id']}/mlflow-metrics")
     assert resp.status_code == 200
@@ -157,7 +188,15 @@ async def test_e2e_regression_training(client):
 
     resp = await client.post(f"/api/experiments/{experiment['id']}/run-sklearn")
     result = resp.json()
-    assert result["status"] == "completed"
+    assert result["status"] == "queued"
+
+    # Wait for queue worker
+    await _wait_for_queue(client, expected=1)
+
+    # Verify experiment completed
+    resp = await client.get(f"/api/experiments/{experiment['id']}")
+    exp = resp.json()
+    assert exp["status"] == "completed"
 
     resp = await client.get(f"/api/experiments/{experiment['id']}/mlflow-metrics")
     mlflow_data = resp.json()
@@ -187,6 +226,9 @@ async def test_e2e_model_registration(client):
     )
     experiment_id = resp.json()["id"]
     await client.post(f"/api/experiments/{experiment_id}/run-sklearn")
+
+    # Wait for queue worker
+    await _wait_for_queue(client, expected=1)
 
     # Register model from experiment
     resp = await client.post(
