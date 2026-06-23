@@ -67,7 +67,7 @@ $ mlp data list
 └──────────────────┴──────────────────┴──────┴──────┴───────┴──────────────────┘
 ```
 
-> **注意**：rich 表格会截断 UUID。通过 SDK 或 `mlp data get <id>` 获取完整 ID。
+> **注意**：rich 表格会截断 UUID。通过 `--json` 参数、`mlp data get <id>` 或 `mlp experiments ids` 获取完整 ID。
 
 ## 5. 数据画像
 
@@ -106,13 +106,15 @@ $ mlp experiments create --name diabetes-reg \
 ✓ Created diabetes-reg
 ```
 
-### sklearn 训练
+### sklearn 训练（自动入队）
 
 ```bash
 $ mlp experiments run-sklearn 7dab54ce-8491-4c7a-9b07-ee201e80b7b0
-✓ completed
-  MLflow Run: 7c8ae763d94b4950bb8db4bc61a29d3f
+✓ Enqueued — position #1 in training queue
+  Monitor: mlp queue watch
 ```
+
+> `run-sklearn` 现在自动加入 FIFO 队列，异步执行，不再同步等待。训练完成后 `status` 变为 `completed`。
 
 ### 查看指标
 
@@ -152,21 +154,54 @@ $ mlp experiments metrics 8c859628-c9a1-478b-bcd7-50966e05e99d
 $ mlp experiments enqueue 16d46630-6679-48b2-9f75-ade2aaffc032
 ✓ Enqueued mpg-reg — position 1
 
-# 查看队列
+# 查看队列（含用户名、MLflow Run、服务器资源）
 $ mlp queue status
-             Training Queue
-┏━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━┓
-┃ Pos ┃ Experiment ┃ Status    ┃ Error ┃
-┡━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━┩
-│ 1   │ mpg-reg    │ completed │       │
-└─────┴────────────┴───────────┴───────┘
-   total: 1  completed: 1  running: -
-         pending: 0  failed: 0
+                         Training Queue
+┏━━━━━┳━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ Pos ┃ Experiment ┃ Exp ID ┃ User ┃ MLflow   ┃ Status    ┃
+┡━━━━━╇━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━┩
+│ 1   │ iris-clf   │ ff3f3b │ demo │ 7c8ae763 │ completed │
+│ 2   │ diabetes   │ 8ced17 │ demo │ b3f2c1a4 │ running   │
+│ 3   │ mpg-reg    │ 16d466 │ bob  │ —        │ queued    │
+└─────┴────────────┴────────┴──────┴──────────┴───────────┘
+   total: 3  completed: 1  running: diabetes  pending: 1  failed: 0
+🖥 CPU: 12%  💾 RAM: 3.3/11.3 GB (29%)  🆓 avail: 8.0 GB
+
+# 实时监控
+$ mlp queue watch   # Ctrl+C 退出
 ```
 
-FIFO 顺序执行，后台 worker 自动处理。状态流转：`queued → running → completed`（失败则 `failed`）。
+FIFO 顺序执行，后台 asyncio worker 一次只跑一个。状态流转：`queued → running → completed`（失败则 `failed`）。`run-sklearn` 自动入队。
 
-## 8. 模型注册、部署、预测
+## 8. 快速查找 ID
+
+```bash
+# 列出所有实验 ID（无分页，完整 UUID）
+$ mlp experiments ids
+                    All Experiment IDs
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
+┃ ID                                   ┃ Name         ┃ Status      ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
+│ 7dab54ce-8491-4c7a-9b07-ee201e80b7b0 │ iris-clf     │ completed   │
+│ 8c859628-c9a1-478b-bcd7-50966e05e99d │ diabetes-reg │ completed   │
+│ 16d46630-6679-48b2-9f75-ade2aaffc032 │ mpg-reg      │ completed   │
+└──────────────────────────────────────┴──────────────┴─────────────┘
+3 experiment(s) total
+
+# 列出所有模型 ID
+$ mlp models ids
+                      All Model IDs
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━┓
+┃ ID                                   ┃ Name         ┃ Ver   ┃ Status     ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━┩
+│ 35c1b274-99b8-4a08-8c36-d996c079b422 │ iris-model   │ 1     │ registered │
+└──────────────────────────────────────┴──────────────┴───────┴────────────┘
+1 model(s) total
+```
+
+无分页，完整 UUID 可直接复制给后续命令使用。也支持 SDK 调用：`await client.experiments.ids()` / `await client.models.ids()`。
+
+## 9. 模型注册、部署、预测
 
 ```bash
 # 注册模型
@@ -189,7 +224,7 @@ $ mlp deployments predict 0f499c60-88d7-413e-8904-d734d6ed34a1 \
 ✓ Prediction: ['Iris-setosa']
 ```
 
-## 9. 系统总览
+## 10. 系统总览
 
 ```bash
 $ mlp status
@@ -216,18 +251,28 @@ Server: ok
 └──────────────────────┴───────────────────────────────────────────────────────┘
 ```
 
-## 10. 完整命令速查
+## 11. 完整命令速查
 
 ```
 mlp auth login/logout/whoami
 mlp data upload/list/get/profile/preview/delete
-mlp experiments list/get/create/run/run-sklearn/metrics/compare/delete/enqueue
+mlp experiments list/ids/get/create/run/run-sklearn/metrics/compare/delete/enqueue
 mlp queue status/watch
-mlp models list/get/register/promote/delete/download
+mlp models list/ids/get/register/promote/delete/download
 mlp deployments list/get/create/stop/delete/predict
 mlp monitor metrics/drift
 mlp status/health
 ```
+
+## 12. 演示 PPT
+
+```bash
+# 打开 Reveal.js 幻灯片
+open demo/presentation.html    # macOS
+xdg-open demo/presentation.html # Linux
+```
+
+21 页幻灯片，含架构图、ER 图、训练队列时序图、数据全流程图等 Mermaid 图表。
 
 ## 环境变量
 

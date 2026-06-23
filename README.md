@@ -215,6 +215,8 @@ asyncio.run(main())
 
 参见 **[DEMO.md](./DEMO.md)** — 从零开始走通全流程：注册 → 上传 Iris / Diabetes / Auto MPG → 训练 → 指标 → 队列 → 模型部署 → 在线预测。
 
+**[demo/presentation.html](./demo/presentation.html)** — 🎞 21 页 Reveal.js 幻灯片，含架构图、ER 图、训练队列时序图、认证流程图等 Mermaid 图表。
+
 ---
 
 ## 📖 API 参考
@@ -302,6 +304,8 @@ asyncio.run(main())
 
 ## 🗄 数据模型速查
 
+> 完整 ER 图见 **[demo/diagrams/er-diagram.png](./demo/diagrams/er-diagram.png)**（7 表 5 关系）
+
 ### User
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -375,6 +379,9 @@ asyncio.run(main())
 │   └── tests/               # 60 个测试
 ├── sdk/ml_platform/         # Python SDK（8 模块）
 ├── cli/ml_platform_cli/     # 🖥 命令行工具（30+ 命令）
+├── demo/
+│   ├── presentation.html    # 🎞 Reveal.js 演示 PPT
+│   └── diagrams/            # Mermaid 源文件 + PNG 图表
 ├── DEMO.md                  # 🎥 完整演示流程
 ├── docker-compose.yml       # 生产基础设施
 └── pyproject.toml
