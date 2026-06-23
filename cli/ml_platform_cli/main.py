@@ -210,6 +210,7 @@ app.add_typer(data_app, name="data")
 def data_list(
     offset: int = typer.Option(0, "--offset", "-o"),
     limit: int = typer.Option(20, "--limit", "-n"),
+    json_out: bool = typer.Option(False, "--json", "-j", help="Output raw JSON (full IDs)"),
 ):
     """List all datasets."""
     async def _run():
@@ -218,6 +219,9 @@ def data_list(
             rows = await c.data.list(offset=offset, limit=limit)
             if not rows:
                 console.print("[dim]No datasets found.[/dim]")
+                return
+            if json_out:
+                console.print_json(json.dumps(rows))
                 return
             table = _format_table(rows, [
                 ("ID", "id"), ("Name", "name"), ("Rows", "row_count"),
@@ -350,6 +354,7 @@ app.add_typer(exp_app, name="experiments", short_help="Manage ML experiments")
 def exp_list(
     offset: int = typer.Option(0, "--offset", "-o"),
     limit: int = typer.Option(20, "--limit", "-n"),
+    json_out: bool = typer.Option(False, "--json", "-j", help="Output raw JSON (full IDs)"),
 ):
     """List all experiments."""
     async def _run():
@@ -358,6 +363,9 @@ def exp_list(
             rows = await c.experiments.list(offset=offset, limit=limit)
             if not rows:
                 console.print("[dim]No experiments found.[/dim]")
+                return
+            if json_out:
+                console.print_json(json.dumps(rows))
                 return
             table = _format_table(rows, [
                 ("ID", "id"), ("Name", "name"), ("Type", "problem_type"),
@@ -636,6 +644,7 @@ app.add_typer(models_app, name="models")
 def models_list(
     offset: int = typer.Option(0, "--offset", "-o"),
     limit: int = typer.Option(20, "--limit", "-n"),
+    json_out: bool = typer.Option(False, "--json", "-j", help="Output raw JSON (full IDs)"),
 ):
     """List all registered models."""
     async def _run():
@@ -644,6 +653,9 @@ def models_list(
             rows = await c.models.list(offset=offset, limit=limit)
             if not rows:
                 console.print("[dim]No models registered.[/dim]")
+                return
+            if json_out:
+                console.print_json(json.dumps(rows))
                 return
             table = _format_table(rows, [
                 ("ID", "id"), ("Name", "name"), ("Version", "version"),
@@ -747,6 +759,7 @@ app.add_typer(deploy_app, name="deployments", short_help="Manage model deploymen
 def deploy_list(
     offset: int = typer.Option(0, "--offset", "-o"),
     limit: int = typer.Option(20, "--limit", "-n"),
+    json_out: bool = typer.Option(False, "--json", "-j", help="Output raw JSON (full IDs)"),
 ):
     """List all deployments."""
     async def _run():
@@ -755,6 +768,9 @@ def deploy_list(
             rows = await c.deployments.list(offset=offset, limit=limit)
             if not rows:
                 console.print("[dim]No deployments found.[/dim]")
+                return
+            if json_out:
+                console.print_json(json.dumps(rows))
                 return
             table = _format_table(rows, [
                 ("ID", "id"), ("Name", "name"), ("Status", "status"),
