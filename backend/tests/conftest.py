@@ -64,9 +64,9 @@ async def init_db(engine):
 
 async def _create_test_user(db: AsyncSession) -> tuple[User, str]:
     """Create a test user and return (user, token)."""
-    from backend.models_db.user import User as U
+    from backend.models_db.user import User
 
-    user = U(
+    user = User(
         username="testrunner",
         email="testrunner@test.com",
         hashed_password=hash_password("testsecret"),

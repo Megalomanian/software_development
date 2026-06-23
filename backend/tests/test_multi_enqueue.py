@@ -165,13 +165,16 @@ async def test_multi_enqueue_all_process(multi_client: AsyncClient, db_session):
     queue.configure(session_factory)
 
     # Create datasets with different characteristics
-    csv1 = b"a,b,target\n1,2,0\n3,4,1\n5,6,0\n7,8,1\n9,10,0\n11,12,1\n"  # classification
-    csv2 = b"x,y,score\n10,20,100\n30,40,200\n50,60,300\n70,80,400\n90,100,500\n110,120,600\n"  # regression
-    csv3 = b"p,q,label\n1.1,2.2,A\n3.3,4.4,B\n5.5,6.6,A\n7.7,8.8,B\n9.9,10.10,A\n11.11,12.12,B\n13.13,14.14,A\n"  # classification
+    _csv_cls = b"a,b,target\n1,2,0\n3,4,1\n5,6,0\n7,8,1\n9,10,0\n11,12,1\n"
+    _csv_reg = b"x,y,score\n10,20,100\n30,40,200\n50,60,300\n70,80,400\n90,100,500\n110,120,600\n"
+    _csv_cls2 = (
+        b"p,q,label\n1.1,2.2,A\n3.3,4.4,B\n5.5,6.6,A\n7.7,8.8,B\n"
+        b"9.9,10.10,A\n11.11,12.12,B\n13.13,14.14,A\n"
+    )
 
-    ds1 = await _upload_csv(multi_client, "batch-cls.csv", csv1)
-    ds2 = await _upload_csv(multi_client, "batch-reg.csv", csv2)
-    ds3 = await _upload_csv(multi_client, "batch-cls2.csv", csv3)
+    ds1 = await _upload_csv(multi_client, "batch-cls.csv", _csv_cls)
+    ds2 = await _upload_csv(multi_client, "batch-reg.csv", _csv_reg)
+    ds3 = await _upload_csv(multi_client, "batch-cls2.csv", _csv_cls2)
 
     # Create and enqueue all three
     exp1 = await _create_and_enqueue(multi_client, "batch-cls", ds1, "target", "classification")
@@ -184,7 +187,7 @@ async def test_multi_enqueue_all_process(multi_client: AsyncClient, db_session):
     # Monitor queue until all done (max 60s)
     all_done = False
     status_snapshots = []
-    for i in range(60):
+    for _ in range(60):
         await asyncio.sleep(1)
         resp = await multi_client.get("/api/experiments/queue/status")
         status = resp.json()
@@ -217,13 +220,15 @@ async def test_multi_enqueue_all_process(multi_client: AsyncClient, db_session):
 
     # All jobs should be in completed state
     for job in final["jobs"]:
-        assert job["status"] == "completed", f"{job['experiment_name']} not completed: {job['status']}"
+        assert job["status"] == "completed", (
+            f"{job['experiment_name']} not completed: {job['status']}"
+        )
 
     # Expire test session cache so it sees worker-committed changes
     db_session.expire_all()
 
     # Verify each experiment has status "completed" and has MLflow metrics
-    for eid, ename in zip(exp_ids, exp_names):
+    for eid, ename in zip(exp_ids, exp_names, strict=True):
         resp = await multi_client.get(f"/api/experiments/{eid}")
         exp = resp.json()
         assert exp["status"] == "completed", f"{ename}: expected completed, got {exp['status']}"
@@ -295,7 +300,8 @@ async def test_multi_enqueue_mixed_with_auth(multi_client: AsyncClient, db_sessi
         metrics = resp.json()
         # Regression should have mse or r2
         metric_keys = [m["key"] for m in metrics["metrics"]]
-        assert any(k in metric_keys for k in ["mse", "r2"]), f"No regression metric found: {metric_keys}"
+        has_reg_metric = any(k in metric_keys for k in ["mse", "r2"])
+        assert has_reg_metric, f"No regression metric found: {metric_keys}"
 
 
 @pytest.mark.asyncio
