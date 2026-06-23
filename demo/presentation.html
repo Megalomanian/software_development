@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ML Platform — 从数据到推理，一行命令就够了</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.min.css">
+<style>
+  :root {
+    --r-heading-color: #60a5fa;
+    --r-link-color: #60a5fa;
+    --r-selection-background-color: #2563eb;
+  }
+  .reveal h1, .reveal h2 { text-transform: none; font-weight: 800; }
+  .reveal h2 { font-size: 1.8em; border-bottom: 3px solid #60a5fa; display: inline-block; padding-bottom: 0.15em; margin-bottom: 0.5em; }
+  .reveal pre { font-size: 0.65em; width: 100%; box-shadow: 0 0 20px rgba(96,165,250,0.15); }
+  .reveal code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+  .reveal table { font-size: 0.55em; margin: 0 auto; }
+  .reveal th { background: #1e3a5f; color: #fff; }
+  .reveal td, .reveal th { padding: 0.3em 0.8em; }
+  .badge { display: inline-block; padding: 0.2em 0.6em; border-radius: 4px; font-size: 0.7em; margin: 0.2em; }
+  .badge-green { background: #166534; color: #bbf7d0; }
+  .badge-blue { background: #1e3a5f; color: #93c5fd; }
+  .badge-orange { background: #78350f; color: #fed7aa; }
+  .two-col { display: flex; gap: 2em; }
+  .two-col > div { flex: 1; }
+  .step-card { background: #1e293b; border-radius: 12px; padding: 0.8em 1.2em; margin: 0.4em 0; border-left: 4px solid #60a5fa; text-align: left; font-size: 0.7em; }
+  .step-card .step-num { display: inline-block; width: 1.8em; height: 1.8em; line-height: 1.8em; text-align: center; background: #2563eb; border-radius: 50%; margin-right: 0.5em; font-weight: bold; font-size: 0.9em; }
+  .icon-list { list-style: none; font-size: 0.75em; text-align: left; }
+  .icon-list li { margin: 0.5em 0; }
+  .pain-table th:first-child { width: 16%; }
+  .pain-table th:nth-child(2) { width: 42%; }
+  .pain-table th:nth-child(3) { width: 42%; }
+  .emoji-big { font-size: 2em; display: block; margin-bottom: 0.3em; }
+  .dim { opacity: 0.5; }
+  .cmd-line { font-family: 'JetBrains Mono', monospace; font-size: 0.7em; color: #93c5fd; }
+  .arrow-down { font-size: 2em; color: #60a5fa; }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ===== Title ===== -->
+<section>
+  <h1>🧠 ML Platform</h1>
+  <p style="font-size: 1.3em; margin-top: 0.5em;"><strong>从数据到推理，一行命令就够了</strong></p>
+  <p style="margin-top: 1.5em; font-size:0.65em; opacity:0.7;">
+    面向数据分析师的端到端 MLOps &nbsp;|&nbsp; Python CLI + SDK &nbsp;|&nbsp; 零配置启动
+  </p>
+  <p style="margin-top: 2em;">
+    <span class="badge badge-green">FastAPI</span>
+    <span class="badge badge-blue">scikit-learn</span>
+    <span class="badge badge-orange">MLflow</span>
+    <span class="badge badge-green">SQLAlchemy</span>
+    <span class="badge badge-blue">typer + rich</span>
+  </p>
+</section>
+
+<!-- ===== Problem ===== -->
+<section>
+  <h2>🤔 解决了什么问题？</h2>
+  <table class="pain-table" style="margin-top:1em;">
+    <thead>
+      <tr><th>痛点</th><th>传统方式</th><th>ML Platform</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>📂 数据分散</td><td>手动 <code>pd.read_csv</code>、清洗、<code>matplotlib</code> 画图</td><td><code>mlp data upload</code> → 自动画像</td></tr>
+      <tr><td>🧪 训练模型</td><td>手写 sklearn + MLflow 集成代码</td><td><code>mlp experiments run-sklearn</code> → 自动追踪</td></tr>
+      <tr><td>📋 多任务调度</td><td>开 5 个终端手动排队</td><td><code>mlp queue watch</code> → FIFO 自动调度</td></tr>
+      <tr><td>🚀 部署模型</td><td><code>docker build</code> + <code>kubectl apply</code></td><td><code>mlp deployments create</code> → 内存加载，立即可用</td></tr>
+      <tr><td>📊 线上监控</td><td>自建 Grafana + Prometheus</td><td><code>mlp monitor metrics</code> → 一键查看</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:1.2em; font-size:1em; color:#60a5fa;">
+    <strong>从几周 → 几分钟</strong>
+  </p>
+</section>
+
+<!-- ===== Architecture ===== -->
+<section>
+  <h2>🏗 架构总览</h2>
+  <pre style="font-size:0.5em; line-height:1.8; background:#111827; width:90%;">
+┌─────────────────────────────────────────────────────┐
+│                   <span style="color:#60a5fa">用户交互层</span>                        │
+│  🖥 mlp CLI (typer+rich) &nbsp;&nbsp;│&nbsp;&nbsp; 🐍 Python SDK (httpx)  │
+├─────────────────────────────────────────────────────┤
+│             🚀 <span style="color:#60a5fa">REST API</span> (FastAPI, async)             │
+│  /data &nbsp; /experiments &nbsp; /models &nbsp; /deployments &nbsp; /monitoring  │
+├─────────────────────────────────────────────────────┤
+│  <span style="color:#93c5fd">PostgreSQL/SQLite</span> &nbsp; <span style="color:#fed7aa">MLflow</span> &nbsp; <span style="color:#bbf7d0">培训队列</span> &nbsp; <span style="color:#c4b5fd">内存推理</span> │
+└─────────────────────────────────────────────────────┘
+  </pre>
+  <div style="margin-top:0.8em; font-size:0.55em; opacity:0.7;">
+    默认 SQLite + 本地 MLflow — 零 Docker 依赖，开发环境即开即用
+  </div>
+</section>
+
+<!-- ===== Quick Start ===== -->
+<section>
+  <h2>🚀 3 步开始</h2>
+  <pre><code class="language-bash" data-trim data-line-numbers>
+# 1. 启动服务 (默认 SQLite，零配置)
+uv run uvicorn backend.main:app --reload
+
+# 2. 注册账号
+mlp auth login --register -u alice -e alice@test.com -p secret123
+
+# 3. 开始训练
+mlp data upload iris.csv
+mlp experiments create -n demo -d &lt;dataset-id&gt; -t species --type classification
+mlp experiments run-sklearn &lt;exp-id&gt;
+  </code></pre>
+  <p style="font-size:0.6em; margin-top:0.8em;">
+    📖 Swagger 文档：<a href="http://localhost:8000/docs">http://localhost:8000/docs</a>
+  </p>
+</section>
+
+<!-- ===== CLI Overview ===== -->
+<section>
+  <h2>🖥 CLI 命令树</h2>
+  <div class="two-col">
+    <div>
+      <pre style="font-size:0.45em; line-height:1.8; background:#111827;">
+<span style="color:#60a5fa;">mlp</span>
+├── <span style="color:#93c5fd;">🔐 auth</span>       login / logout / whoami
+├── <span style="color:#93c5fd;">📂 data</span>       upload / list / get / profile
+│              preview / delete
+├── <span style="color:#93c5fd;">🧪 experiments</span> list / <span style="color:#fbbf24;">ids</span> / get / create / run
+│              run-sklearn / metrics
+│              compare / delete / enqueue
+├── <span style="color:#93c5fd;">📋 queue</span>       status / watch
+├── <span style="color:#93c5fd;">🤖 models</span>      list / <span style="color:#fbbf24;">ids</span> / get / register
+│              promote / delete / download
+├── <span style="color:#93c5fd;">🚀 deployments</span> list / get / create / stop
+│              delete / predict
+├── <span style="color:#93c5fd;">📊 monitor</span>     metrics / drift
+├── <span style="color:#93c5fd;">📈 status</span>
+└── <span style="color:#93c5fd;">💚 health</span>
+      </pre>
+    </div>
+    <div>
+      <pre style="font-size:0.45em; line-height:1.8; background:#111827;">
+<span style="color:#fbbf24;"># 快速 ID 查找（无分页）</span>
+mlp experiments ids
+mlp models ids
+
+<span style="color:#fbbf24;"># 训练队列带服务器资源</span>
+mlp queue watch
+🖥 CPU: 12%  💾 RAM: 3.3/11.3 GB
+🆓 avail: 8.0 GB
+
+<span style="color:#fbbf24;"># 在线预测</span>
+mlp deployments predict &lt;id&gt; \
+  -d '{"f1":5.1,"f2":3.5}'
+
+<span style="color:#fbbf24;"># 切换后端</span>
+mlp config --server http://prod:8000
+      </pre>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Python SDK ===== -->
+<section>
+  <h2>🐍 Python SDK</h2>
+  <pre><code class="language-python" data-trim data-line-numbers="1-7|9-12|14-20">
+import asyncio
+from ml_platform import Client
+
+async def main():
+    async with Client("http://localhost:8000") as client:
+        # 注册并登录
+        user = await client.auth.register(
+            "alice", "alice@test.com", "secret123")
+        client.set_token(user["access_token"])
+
+        # 数据 → 训练 → 部署 → 预测
+        ds = await client.data.upload("iris.csv")
+        exp = await client.experiments.create(
+            name="demo", dataset_id=ds["id"],
+            target_column="species", problem_type="classification")
+        await client.experiments.run_sklearn(exp["id"])
+
+        model = await client.models.register("iris-model", exp["id"])
+        dep = await client.deployments.create(model["id"])
+        pred = await client.deployments.predict(dep["id"], {
+            "sepal_length": 5.1, "sepal_width": 3.5,
+            "petal_length": 1.4, "petal_width": 0.2,
+        })
+        print(pred)  # {"prediction": ["setosa"]}
+  </code></pre>
+  <p class="dim" style="font-size:0.55em; margin-top:0.5em;">
+    全异步 (httpx + asyncio) · 上下文管理器支持 · 自动错误处理
+  </p>
+</section>
+
+<!-- ===== Training Queue ===== -->
+<section>
+  <h2>📋 训练队列 (FIFO)</h2>
+  <div style="margin-bottom:0.8em; font-size:0.7em; text-align:left;">
+    <strong>问题</strong>: 10 个用户同时提交训练 → 资源争抢、OOM、互相覆盖指标
+  </div>
+  <div class="two-col">
+    <div>
+      <pre style="font-size:0.5em; line-height:1.8; background:#111827;">
+<span style="color:#60a5fa;">┌──────────┐</span>
+<span style="color:#60a5fa;">│ enqueue  │</span> &lt;── POST /experiments/{id}/enqueue
+<span style="color:#60a5fa;">│   #1     │</span>        POST /experiments/{id}/run-sklearn
+<span style="color:#60a5fa;">├──────────┤</span>
+<span style="color:#93c5fd;">│ queued   │</span>
+<span style="color:#93c5fd;">├──────────┤</span>    <span style="color:#fbbf24;">asyncio background worker</span>
+<span style="color:#fbbf24;">│ running  │</span>    <span style="color:#fbbf24;">─── 一次只跑一个 ───</span>
+<span style="color:#fbbf24;">├──────────┤</span>
+<span style="color:#22c55e;">│ completed│</span> ── Experiment.status = 'completed'
+<span style="color:#22c55e;">│  /failed │</span> ── Experiment.mlflow_run_id = ...
+<span style="color:#22c55e;">└──────────┘</span>
+      </pre>
+    </div>
+    <div>
+      <pre style="font-size:0.48em; line-height:1.8; background:#111827;">
+<span style="color:#60a5fa;">GET /api/experiments/queue/status</span>
+
+┏━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━┓
+┃<span style="color:#93c5fd;">Pos</span> ┃ <span style="color:#93c5fd;">Experiment</span>┃ <span style="color:#93c5fd;">User</span>     ┃ <span style="color:#93c5fd;">MLflow</span> ┃ <span style="color:#93c5fd;">Status</span> ┃
+┡━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━┩
+│<span style="color:#fbbf24;">1</span>   │ iris-cls   │ bob      │ 8ced │ <span style="color:#22c55e;">completed</span>│
+│<span style="color:#93c5fd;">2</span>   │ diabetes   │ alice    │ —    │ <span style="color:#fbbf24;">running</span>  │
+│<span style="color:#93c5fd;">3</span>   │ auto-mpg   │ carol    │ —    │ <span style="color:#6b7280;">queued</span>    │
+└────┴───────────┴──────────┴──────┴──────────┘
+
+<span style="color:#22c55e;">completed: 1</span>  <span style="color:#fbbf24;">running: iris-cls</span>
+<span style="color:#6b7280;">pending: 1</span>   <span style="color:#ef4444;">failed: 0</span>
+
+🖥 <span style="color:#22c55e;">CPU: 12%</span>  💾 <span style="color:#93c5fd;">RAM: 3.3/11.3 GB (29%)</span>
+      </pre>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Model Deploy Flow ===== -->
+<section>
+  <h2>🚀 模型部署 & 推理</h2>
+  <div style="text-align:left;">
+    <div class="step-card"><span class="step-num">1</span> <strong>训练</strong> &mdash; <code>mlp experiments run-sklearn &lt;exp-id&gt;</code></div>
+    <div style="text-align:center; font-size:1.5em; color:#60a5fa;">↓</div>
+    <div class="step-card"><span class="step-num">2</span> <strong>注册</strong> &mdash; <code>mlp models register -n iris-model -e &lt;exp-id&gt;</code></div>
+    <div style="text-align:center; font-size:1.5em; color:#60a5fa;">↓</div>
+    <div class="step-card"><span class="step-num">3</span> <strong>部署</strong> &mdash; <code>mlp deployments create -m &lt;model-id&gt;</code></div>
+    <div style="text-align:center; font-size:1.5em; color:#60a5fa;">↓</div>
+    <div class="step-card"><span class="step-num">4</span> <strong>预测</strong> &mdash; <code>mlp deployments predict &lt;dep-id&gt; -d '{"f1":5.1}'</code></div>
+  </div>
+  <p style="margin-top:1em; font-size:0.6em; opacity:0.7;">
+    本地内存推理 (默认) &nbsp;|&nbsp; 支持 Ray Serve 扩展
+  </p>
+</section>
+
+<!-- ===== Monitoring ===== -->
+<section>
+  <h2>📊 监控 & 漂移检测</h2>
+  <div class="two-col">
+    <div>
+      <pre style="font-size:0.5em; line-height:1.8; background:#111827;">
+<span style="color:#60a5fa;"># 推理指标</span>
+mlp monitor metrics &lt;deployment-id&gt; --range 24h
+
+Metrics — 24h
+┌──────────────────┬──────────┐
+│ Metric           │ Value    │
+├──────────────────┼──────────┤
+│ Total Requests   │ 1247     │
+│ Avg Latency      │ 12.3 ms  │
+│ P99 Latency      │ 45.7 ms  │
+│ Error Rate       │ 0.24%    │
+│ Throughput       │ 0.87 rps │
+└──────────────────┴──────────┘
+      </pre>
+    </div>
+    <div>
+      <pre style="font-size:0.5em; line-height:1.8; background:#111827;">
+<span style="color:#60a5fa;"># 数据漂移 (z-score)</span>
+mlp monitor drift &lt;deployment-id&gt;
+
+Drift detected: <span style="color:#ef4444;">True</span>
+Drift score:   2.47
+
+Feature drifts:
+  <span style="color:#ef4444;">sepal_width: z=2.83 </span>
+  <span style="color:#6b7280;">petal_length: z=0.94</span>
+  <span style="color:#6b7280;">sepal_length: z=0.51</span>
+      </pre>
+      <p style="font-size:0.55em; opacity:0.7; margin-top:0.5em;">
+        🧠 基于 <strong>Evidently AI</strong> + <strong>z-score</strong> 漂移检测<br>
+        阈值: |z| > 2.0 触发告警
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== API Summary ===== -->
+<section>
+  <h2>📖 API 全景</h2>
+  <table style="font-size:0.47em;">
+    <thead>
+      <tr><th>前缀</th><th>关键端点</th><th>认证</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>/api/auth</code></td><td>POST register / login · GET me / users</td><td>混合</td><td>bcrypt + JWT</td></tr>
+      <tr><td><code>/api/data</code></td><td>POST upload · GET list/:id/profile/preview · DELETE</td><td>写需</td><td>CSV → 自动 pandas 画像</td></tr>
+      <tr><td><code>/api/experiments</code></td><td>GET list/<span style="color:#fbbf24;">ids</span> · POST create/run-sklearn/<span style="color:#fbbf24;">enqueue</span><br>GET :id/mlflow-metrics · GET compare · GET queue/status</td><td>写需</td><td>sklearn + MLflow 训练 + FIFO 队列</td></tr>
+      <tr><td><code>/api/models</code></td><td>GET list/<span style="color:#fbbf24;">ids</span> · POST register · POST promote<br>GET :id/download · DELETE</td><td>写需</td><td>版本管理 + pickle 下载</td></tr>
+      <tr><td><code>/api/deployments</code></td><td>GET list/:id · POST create/predict/stop · DELETE</td><td>写需</td><td>内存推理 + 推理日志</td></tr>
+      <tr><td><code>/api/monitoring</code></td><td>GET :id/metrics?time_range= · GET :id/drift</td><td>否</td><td>延迟/错误率/漂移</td></tr>
+      <tr><td><code>/api/system</code></td><td>GET /status · GET /api/health</td><td>否</td><td>实体计数 + 资源状态</td></tr>
+    </tbody>
+  </table>
+  <p class="dim" style="font-size:0.5em; margin-top:0.5em;">
+    所有 GET 查询分页 <code>offset</code>/<code>limit</code> · /ids 端点无分页返回全部 ID
+  </p>
+</section>
+
+<!-- ===== Full Demo ===== -->
+<section>
+  <h2>🎥 完整流程演示</h2>
+  <pre style="font-size:0.47em; line-height:1.9; background:#111827; width:95%;">
+<span style="color:#6b7280;"># 1. 启动服务 (终端 1)</span>
+uv run uvicorn backend.main:app --reload
+
+<span style="color:#6b7280;"># 2. 注册 & 登录 (终端 2)</span>
+mlp auth login --register -u alice -e alice@test.com -p demo12345
+
+<span style="color:#6b7280;"># 3. 上传数据 + 创建实验</span>
+mlp data upload <span style="color:#fbbf24;">iris.csv</span>
+mlp experiments create -n iris-test -d <span style="color:#fbbf24;">&lt;dataset-id&gt;</span> -t species --type classification
+
+<span style="color:#6b7280;"># 4. 提交训练 (自动入队)</span>
+mlp experiments run-sklearn <span style="color:#fbbf24;">&lt;exp-id&gt;</span>
+mlp queue watch                     <span style="color:#6b7280;"># 看队列实时状态 + CPU/RAM</span>
+
+<span style="color:#6b7280;"># 5. 查看指标</span>
+mlp experiments metrics <span style="color:#fbbf24;">&lt;exp-id&gt;</span>
+<span style="color:#6b7280;"># accuracy: 0.9667 ✓</span>
+
+<span style="color:#6b7280;"># 6. 注册模型 → 部署 → 预测</span>
+mlp models register -n iris-model -e <span style="color:#fbbf24;">&lt;exp-id&gt;</span>
+mlp deployments create -m <span style="color:#fbbf24;">&lt;model-id&gt;</span>
+mlp deployments predict <span style="color:#fbbf24;">&lt;dep-id&gt;</span> -d <span style="color:#22c55e;">'{"sepal_length":5.1,"sepal_width":3.5,"petal_length":1.4,"petal_width":0.2}'</span>
+<span style="color:#6b7280;"># ✓ Prediction: ["setosa"]</span>
+
+<span style="color:#6b7280;"># 7. 查监控</span>
+mlp monitor metrics <span style="color:#fbbf24;">&lt;dep-id&gt;</span> --range 1h
+mlp monitor drift <span style="color:#fbbf24;">&lt;dep-id&gt;</span>
+
+<span style="color:#6b7280;"># 8. 系统概览</span>
+mlp status
+</pre>
+  <p class="dim" style="font-size:0.5em;">
+    详见 <a href="./DEMO.md">DEMO.md</a> — 从零开始的完整演示
+  </p>
+</section>
+
+<!-- ===== Quick ID Lookup ===== -->
+<section>
+  <h2>🆕 快速 ID 查找</h2>
+  <div class="two-col">
+    <div>
+      <pre style="font-size:0.5em; line-height:1.8; background:#111827;">
+<span style="color:#60a5fa;">mlp experiments ids</span>
+
+All Experiment IDs
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┓
+┃ <span style="color:#93c5fd;">ID</span>             ┃ <span style="color:#93c5fd;">Name</span>      ┃ <span style="color:#93c5fd;">Status</span>   ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━┩
+│ ff3f3b53-...   │ iris-cls  │ <span style="color:#22c55e;">completed</span>│
+│ 8ced1704-...   │ diabetes  │ <span style="color:#22c55e;">completed</span>│
+│ a1b2c3d4-...   │ auto-mpg  │ <span style="color:#fbbf24;">running</span>  │
+└────────────────┴───────────┴──────────┘
+        <span style="color:#6b7280;">3 experiment(s) total</span>
+      </pre>
+      <ul style="font-size:0.55em; text-align:left; margin-top:0.5em;">
+        <li>完整 UUID，可直接复制使用</li>
+        <li>无分页 — 一次返回所有</li>
+        <li>适合 CLI 自动补全场景</li>
+      </ul>
+    </div>
+    <div>
+      <pre style="font-size:0.5em; line-height:1.8; background:#111827;">
+<span style="color:#60a5fa;">mlp models ids</span>
+
+All Model IDs
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━┓
+┃ <span style="color:#93c5fd;">ID</span>             ┃ <span style="color:#93c5fd;">Name</span>      ┃ <span style="color:#93c5fd;">Ver</span> ┃ <span style="color:#93c5fd;">Status</span>   ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━┩
+│ e5f6g7h8-...   │ iris-model│  1  │ <span style="color:#22c55e;">registered</span>│
+│ i9j0k1l2-...   │ tmp-model │  2  │ <span style="color:#fbbf24;">promoted</span> │
+└────────────────┴───────────┴─────┴──────────┘
+        <span style="color:#6b7280;">2 model(s) total</span>
+      </pre>
+      <ul style="font-size:0.55em; text-align:left; margin-top:0.5em;">
+        <li>带版本号和状态</li>
+        <li>支持 <code>--json</code> 原始输出</li>
+        <li>Python SDK: <code>await client.models.ids()</code></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Tech Stack ===== -->
+<section>
+  <h2>🔧 技术栈</h2>
+  <table style="font-size:0.55em;">
+    <thead><tr><th>层</th><th>技术</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>后端框架</td><td><strong>FastAPI</strong> (Python 3.12+)</td><td>异步 REST API</td></tr>
+      <tr><td>数据库</td><td><strong>SQLAlchemy 2.0</strong> (async)</td><td>PostgreSQL 生产 / SQLite 开发</td></tr>
+      <tr><td>训练</td><td><strong>scikit-learn</strong> + <strong>MLflow</strong></td><td>RandomForest + 实验追踪</td></tr>
+      <tr><td>任务队列</td><td><strong>Temporal</strong></td><td>工作流编排</td></tr>
+      <tr><td>模型推理</td><td>本地内存 (默认) / <strong>Ray Serve</strong></td><td>零依赖部署</td></tr>
+      <tr><td>监控</td><td>Prometheus + <strong>Evidently AI</strong></td><td>指标 + 漂移检测</td></tr>
+      <tr><td>对象存储</td><td><strong>MinIO</strong> (S3-compatible)</td><td>数据集 / 模型文件</td></tr>
+      <tr><td>CLI</td><td><strong>typer</strong> + <strong>rich</strong></td><td>终端 UI (彩色表格、实时面板)</td></tr>
+      <tr><td>SDK</td><td><strong>httpx</strong> (async)</td><td>全异步 Python 客户端</td></tr>
+      <tr><td>包管理</td><td><strong>uv</strong></td><td>快速安装 (清华镜像)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===== Testing ===== -->
+<section>
+  <h2>✅ 测试覆盖</h2>
+  <div style="display:flex; gap:2em; justify-content:center; align-items:center;">
+    <div style="text-align:center;">
+      <span class="emoji-big">🧪</span>
+      <span style="font-size:2.5em; font-weight:900; color:#22c55e;">60</span><br>
+      <span style="font-size:0.7em;">Passed</span>
+    </div>
+    <div style="text-align:center;">
+      <span class="emoji-big">⏭</span>
+      <span style="font-size:2.5em; font-weight:900; color:#fbbf24;">2</span><br>
+      <span style="font-size:0.7em;">Skipped (MLflow Server)</span>
+    </div>
+    <div style="text-align:center;">
+      <span class="emoji-big">⚡</span>
+      <span style="font-size:2.5em; font-weight:900; color:#60a5fa;">~9min</span><br>
+      <span style="font-size:0.7em;">Total runtime</span>
+    </div>
+  </div>
+  <table style="font-size:0.48em; margin-top:1.5em;">
+    <thead><tr><th>模块</th><th>测试数</th><th>覆盖内容</th></tr></thead>
+    <tbody>
+      <tr><td>test_api.py</td><td>1</td><td>健康检查</td></tr>
+      <tr><td>test_auth.py</td><td>8</td><td>注册 / 登录 / 重复 / 短密码 / 无 token</td></tr>
+      <tr><td>test_data.py</td><td>8</td><td>上传 / 列表 / 详情 / 画像 (含 top_values) / 大文件</td></tr>
+      <tr><td>test_experiments.py</td><td>8</td><td>CRUD / 运行 / 指标 / 多实验 / description</td></tr>
+      <tr><td>test_models.py</td><td>6</td><td>注册 / 列表 / 晋升 / 详情 / 注册不存在实验</td></tr>
+      <tr><td>test_deployments.py</td><td>7</td><td>创建 / 列表 / 停止 / 预测 / 不存在模型 / 推理日志</td></tr>
+      <tr><td>test_e2e_training.py</td><td>3</td><td>分类 / 回归 / 模型注册 (端到端)</td></tr>
+      <tr><td>test_multi_enqueue.py</td><td>4</td><td>FIFO 顺序 / 全处理 / 认证 / 并发入队</td></tr>
+      <tr><td>test_training_queue.py</td><td>5</td><td>入队 / 状态 / 不存在 / 多次 / 后台处理</td></tr>
+      <tr><td>test_monitoring.py</td><td>5</td><td>指标 / 时间范围 / 漂移 / 数据不足 / 不存在部署</td></tr>
+      <tr><td>test_ids_endpoints.py</td><td>6</td><td>🆕 实验 IDs / 模型 IDs / 路由不冲突</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===== Project Status ===== -->
+<section>
+  <h2>📁 项目规模</h2>
+  <table style="font-size:0.55em;">
+    <thead><tr><th>模块</th><th>文件</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><code>backend/api/</code></td><td>8 个路由模块</td><td>auth, data, experiments, models, deployments, monitoring, system, webhooks</td></tr>
+      <tr><td><code>backend/services/</code></td><td>8 个服务</td><td>data, training, model, deployment, monitoring, local_serving, ray_serve, training_queue</td></tr>
+      <tr><td><code>backend/models_db/</code></td><td>7 个 ORM</td><td>User, Dataset, DatasetColumn, Experiment, ModelVersion, Deployment, InferenceLog</td></tr>
+      <tr><td><code>sdk/ml_platform/</code></td><td>8 个模块</td><td>client, auth, data, experiments, models, deployments, monitoring, system</td></tr>
+      <tr><td><code>cli/ml_platform_cli/</code></td><td>4 个模块</td><td>main (30+ 命令), config, __init__</td></tr>
+      <tr><td><code>backend/tests/</code></td><td>11 个测试文件</td><td>60 passed, 2 skipped</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===== Thank You ===== -->
+<section>
+  <h1 style="font-size:3em;">🧠</h1>
+  <h2>Thank You</h2>
+  <div style="margin-top:1.5em; font-size:0.65em; line-height:2;">
+    <p>🌐 <strong>GitHub</strong>: <a href="https://github.com/Megalomanian/software_development">Megalomanian/software_development</a></p>
+    <p>📖 <strong>Swagger</strong>: <a href="http://localhost:8000/docs">localhost:8000/docs</a></p>
+    <p>📄 <strong>Demo</strong>: <a href="./DEMO.md">DEMO.md</a></p>
+    <p>🐍 <strong>SDK</strong>: <code>pip install ml-platform</code></p>
+    <p>🖥 <strong>CLI</strong>: <code>mlp --help</code></p>
+  </div>
+  <div style="margin-top:2em;">
+    <span class="badge badge-green">60 tests</span>
+    <span class="badge badge-blue">30+ CLI commands</span>
+    <span class="badge badge-orange">8 API modules</span>
+    <span class="badge badge-green">Zero Docker (dev)</span>
+  </div>
+</section>
+
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.min.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: 'c/t',
+    transition: 'slide',
+    transitionSpeed: 'default',
+    backgroundTransition: 'fade',
+    width: 1280,
+    height: 800,
+    margin: 0.08,
+    plugins: [RevealHighlight],
+  });
+</script>
+</body>
+</html>
