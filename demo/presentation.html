@@ -166,76 +166,100 @@ mlp config --server http://prod:8000
 <!-- ===== Python SDK ===== -->
 <section>
   <h2>🐍 Python SDK</h2>
-  <pre><code class="language-python" data-trim data-line-numbers="1-7|9-12|14-20">
+  <div class="two-col">
+    <div>
+      <pre style="font-size:0.38em; line-height:1.5;"><code class="language-python" data-trim>
 import asyncio
 from ml_platform import Client
 
 async def main():
-    async with Client("http://localhost:8000") as client:
-        # 注册并登录
-        user = await client.auth.register(
+    async with Client("http://localhost:8000") as c:
+        # 注册
+        user = await c.auth.register(
             "alice", "alice@test.com", "secret123")
-        client.set_token(user["access_token"])
+        c.set_token(user["access_token"])
 
-        # 数据 → 训练 → 部署 → 预测
-        ds = await client.data.upload("iris.csv")
-        exp = await client.experiments.create(
+        # 上传 & 训练
+        ds = await c.data.upload("iris.csv")
+        exp = await c.experiments.create(
             name="demo", dataset_id=ds["id"],
-            target_column="species", problem_type="classification")
-        await client.experiments.run_sklearn(exp["id"])
+            target_column="species",
+            problem_type="classification")
+        await c.experiments.run_sklearn(exp["id"])
+</code></pre>
+    </div>
+    <div>
+      <pre style="font-size:0.38em; line-height:1.5;"><code class="language-python" data-trim>
+        # 注册模型 & 部署
+        model = await c.models.register(
+            "iris-model", exp["id"])
+        dep = await c.deployments.create(model["id"])
 
-        model = await client.models.register("iris-model", exp["id"])
-        dep = await client.deployments.create(model["id"])
-        pred = await client.deployments.predict(dep["id"], {
-            "sepal_length": 5.1, "sepal_width": 3.5,
-            "petal_length": 1.4, "petal_width": 0.2,
-        })
+        # 在线预测
+        pred = await c.deployments.predict(
+            dep["id"], {
+                "sepal_length": 5.1,
+                "sepal_width": 3.5,
+                "petal_length": 1.4,
+                "petal_width": 0.2,
+            })
         print(pred)  # {"prediction": ["setosa"]}
-  </code></pre>
-  <p class="dim" style="font-size:0.55em; margin-top:0.5em;">
-    全异步 (httpx + asyncio) · 上下文管理器支持 · 自动错误处理
+
+asyncio.run(main())
+</code></pre>
+    </div>
+  </div>
+  <p class="dim" style="font-size:0.5em; margin-top:0.2em;">
+    全异步 (httpx + asyncio) · 上下文管理器 · 自动错误处理 &nbsp;|&nbsp; 也可以 <code>client.set_token()</code> 复用 token 而不进入 context manager
   </p>
 </section>
 
 <!-- ===== Training Queue ===== -->
 <section>
   <h2>📋 训练队列 (FIFO)</h2>
-  <div style="margin-bottom:0.8em; font-size:0.7em; text-align:left;">
-    <strong>问题</strong>: 10 个用户同时提交训练 → 资源争抢、OOM、互相覆盖指标
+  <div style="margin-bottom:0.4em; font-size:0.55em; text-align:left;">
+    <strong>问题</strong>: 10 个用户同时提交训练 → 资源争抢、OOM、互相覆盖 &nbsp;|&nbsp; <strong>方案</strong>: asyncio 后台 worker，一次只跑一个
   </div>
   <div class="two-col">
     <div>
-      <pre style="font-size:0.5em; line-height:1.8; background:#111827;">
-<span style="color:#60a5fa;">┌──────────┐</span>
-<span style="color:#60a5fa;">│ enqueue  │</span> &lt;── POST /experiments/{id}/enqueue
-<span style="color:#60a5fa;">│   #1     │</span>        POST /experiments/{id}/run-sklearn
-<span style="color:#60a5fa;">├──────────┤</span>
-<span style="color:#93c5fd;">│ queued   │</span>
-<span style="color:#93c5fd;">├──────────┤</span>    <span style="color:#fbbf24;">asyncio background worker</span>
-<span style="color:#fbbf24;">│ running  │</span>    <span style="color:#fbbf24;">─── 一次只跑一个 ───</span>
-<span style="color:#fbbf24;">├──────────┤</span>
-<span style="color:#22c55e;">│ completed│</span> ── Experiment.status = 'completed'
-<span style="color:#22c55e;">│  /failed │</span> ── Experiment.mlflow_run_id = ...
-<span style="color:#22c55e;">└──────────┘</span>
+      <pre style="font-size:0.36em; line-height:1.55; background:#111827;">
+<span style="color:#60a5fa;">POST /experiments/{id}/run-sklearn</span>
+<span style="color:#60a5fa;">POST /experiments/{id}/enqueue</span>
+          <span style="color:#6b7280;">↓</span>
+<span style="color:#93c5fd;">┌───────────────┐</span>
+<span style="color:#93c5fd;">│  TrainingQueue │</span>  <span style="color:#6b7280;">singleton</span>
+<span style="color:#93c5fd;">│  _queue: [...] │</span>  <span style="color:#6b7280;">asyncio.Lock</span>
+<span style="color:#93c5fd;">├───────────────┤</span>
+<span style="color:#6b7280;">│ #1 queued     │</span>
+<span style="color:#fbbf24;">│ #2 running ▸  │</span>  <span style="color:#fbbf24;">background worker</span>
+<span style="color:#6b7280;">│ #3 queued     │</span>  <span style="color:#6b7280;">一次只跑一个</span>
+<span style="color:#22c55e;">│ #4 completed  │</span>
+<span style="color:#22c55e;">└───────────────┘</span>
+          <span style="color:#6b7280;">↓</span>
+<span style="color:#22c55e;">Experiment.status = 'completed'</span>
+<span style="color:#22c55e;">Experiment.mlflow_run_id = ...</span>
       </pre>
     </div>
     <div>
-      <pre style="font-size:0.48em; line-height:1.8; background:#111827;">
+      <pre style="font-size:0.36em; line-height:1.5; background:#111827;">
 <span style="color:#60a5fa;">GET /api/experiments/queue/status</span>
 
-┏━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━┓
-┃<span style="color:#93c5fd;">Pos</span> ┃ <span style="color:#93c5fd;">Experiment</span>┃ <span style="color:#93c5fd;">User</span>     ┃ <span style="color:#93c5fd;">MLflow</span> ┃ <span style="color:#93c5fd;">Status</span> ┃
-┡━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━┩
-│<span style="color:#fbbf24;">1</span>   │ iris-cls   │ bob      │ 8ced │ <span style="color:#22c55e;">completed</span>│
-│<span style="color:#93c5fd;">2</span>   │ diabetes   │ alice    │ —    │ <span style="color:#fbbf24;">running</span>  │
-│<span style="color:#93c5fd;">3</span>   │ auto-mpg   │ carol    │ —    │ <span style="color:#6b7280;">queued</span>    │
-└────┴───────────┴──────────┴──────┴──────────┘
+┏━━┳━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━━━━┓
+┃<span style="color:#93c5fd;">P</span>┃<span style="color:#93c5fd;">Experiment</span>┃<span style="color:#93c5fd;">User</span> ┃<span style="color:#93c5fd;">Run</span> ┃<span style="color:#93c5fd;">Status</span>  ┃
+┡━━╇━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━━━━┩
+│<span style="color:#fbbf24;">1</span>│iris-cls  │bob   │8ced │<span style="color:#22c55e;">complete</span>│
+│<span style="color:#fbbf24;">2</span>│diabetes  │alice │—   │<span style="color:#fbbf24;">running</span> │
+│<span style="color:#6b7280;">3</span>│auto-mpg  │carol │—   │<span style="color:#6b7280;">queued</span>  │
+└──┴──────────┴──────┴──────┴──────────┘
 
-<span style="color:#22c55e;">completed: 1</span>  <span style="color:#fbbf24;">running: iris-cls</span>
-<span style="color:#6b7280;">pending: 1</span>   <span style="color:#ef4444;">failed: 0</span>
+<span style="color:#22c55e;">comp:3</span> <span style="color:#fbbf24;">run:diabetes</span> <span style="color:#6b7280;">pend:1</span> <span style="color:#ef4444;">fail:0</span>
 
-🖥 <span style="color:#22c55e;">CPU: 12%</span>  💾 <span style="color:#93c5fd;">RAM: 3.3/11.3 GB (29%)</span>
+🖥 <span style="color:#22c55e;">CPU:12%</span> 💾 <span style="color:#93c5fd;">RAM:3.3/11.3GB(29%)</span>
+🆓 <span style="color:#6b7280;">avail:8.0 GB</span>
       </pre>
+      <p style="font-size:0.4em; opacity:0.6; margin-top:0.2em;">
+        <code>mlp queue watch</code> — Live 刷新
+      </p>
     </div>
   </div>
 </section>
@@ -324,39 +348,35 @@ Feature drifts:
 <!-- ===== Full Demo ===== -->
 <section>
   <h2>🎥 完整流程演示</h2>
-  <pre style="font-size:0.47em; line-height:1.9; background:#111827; width:95%;">
-<span style="color:#6b7280;"># 1. 启动服务 (终端 1)</span>
+  <pre style="font-size:0.4em; line-height:1.5; background:#111827; width:95%;">
+<span style="color:#6b7280;"># 1. 启动服务</span>
 uv run uvicorn backend.main:app --reload
 
-<span style="color:#6b7280;"># 2. 注册 & 登录 (终端 2)</span>
+<span style="color:#6b7280;"># 2. 注册 & 登录</span>
 mlp auth login --register -u alice -e alice@test.com -p demo12345
 
 <span style="color:#6b7280;"># 3. 上传数据 + 创建实验</span>
 mlp data upload <span style="color:#fbbf24;">iris.csv</span>
-mlp experiments create -n iris-test -d <span style="color:#fbbf24;">&lt;dataset-id&gt;</span> -t species --type classification
+mlp experiments create -n iris-test -d <span style="color:#fbbf24;">&lt;ds-id&gt;</span> -t species --type classification
 
 <span style="color:#6b7280;"># 4. 提交训练 (自动入队)</span>
-mlp experiments run-sklearn <span style="color:#fbbf24;">&lt;exp-id&gt;</span>
-mlp queue watch                     <span style="color:#6b7280;"># 看队列实时状态 + CPU/RAM</span>
+mlp experiments run-sklearn <span style="color:#fbbf24;">&lt;exp-id&gt;</span>      <span style="color:#6b7280;">← 入 FIFO 队列</span>
+mlp queue watch                        <span style="color:#6b7280;">← 看实时状态 + CPU/RAM</span>
 
 <span style="color:#6b7280;"># 5. 查看指标</span>
-mlp experiments metrics <span style="color:#fbbf24;">&lt;exp-id&gt;</span>
-<span style="color:#6b7280;"># accuracy: 0.9667 ✓</span>
+mlp experiments metrics <span style="color:#fbbf24;">&lt;exp-id&gt;</span>      <span style="color:#6b7280;"># accuracy: 0.9667 ✓</span>
 
-<span style="color:#6b7280;"># 6. 注册模型 → 部署 → 预测</span>
+<span style="color:#6b7280;"># 6. 注册 → 部署 → 预测</span>
 mlp models register -n iris-model -e <span style="color:#fbbf24;">&lt;exp-id&gt;</span>
 mlp deployments create -m <span style="color:#fbbf24;">&lt;model-id&gt;</span>
-mlp deployments predict <span style="color:#fbbf24;">&lt;dep-id&gt;</span> -d <span style="color:#22c55e;">'{"sepal_length":5.1,"sepal_width":3.5,"petal_length":1.4,"petal_width":0.2}'</span>
+mlp deployments predict <span style="color:#fbbf24;">&lt;dep-id&gt;</span> -d <span style="color:#22c55e;">'{...features...}'</span>
 <span style="color:#6b7280;"># ✓ Prediction: ["setosa"]</span>
 
-<span style="color:#6b7280;"># 7. 查监控</span>
+<span style="color:#6b7280;"># 7. 监控 & 系统</span>
 mlp monitor metrics <span style="color:#fbbf24;">&lt;dep-id&gt;</span> --range 1h
-mlp monitor drift <span style="color:#fbbf24;">&lt;dep-id&gt;</span>
-
-<span style="color:#6b7280;"># 8. 系统概览</span>
 mlp status
 </pre>
-  <p class="dim" style="font-size:0.5em;">
+  <p class="dim" style="font-size:0.45em; margin-top:0.1em;">
     详见 <a href="./DEMO.md">DEMO.md</a> — 从零开始的完整演示
   </p>
 </section>
