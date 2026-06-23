@@ -126,18 +126,35 @@ def login(
         password = getpass.getpass("Password: ")
 
     async def _login():
+        import httpx
         c = Client(base_url=server)
         try:
             if register:
                 if not username:
-                    import getpass as _gp
                     _u = typer.prompt("Username")
                 else:
                     _u = username
-                result = await c.auth.register(_u, email, password)
+                try:
+                    result = await c.auth.register(_u, email, password)
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 409:
+                        err_console.print(
+                            f"[yellow]⚠[/yellow] User already exists."
+                            f" Use [bold]mlp auth login -e {email}[/bold] instead."
+                        )
+                        raise typer.Exit(code=1)
+                    raise
                 console.print(f"[green]✓[/green] Registered as [bold]{result['username']}[/bold]")
             else:
-                result = await c.auth.login(email, password)
+                try:
+                    result = await c.auth.login(email, password)
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 401:
+                        err_console.print(
+                            "[red]✗[/red] Invalid email or password."
+                        )
+                        raise typer.Exit(code=1)
+                    raise
                 console.print(f"[green]✓[/green] Logged in as [bold]{result['username']}[/bold]")
 
             save_auth(result["access_token"], server, result)
