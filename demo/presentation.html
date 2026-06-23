@@ -24,19 +24,17 @@
   .badge-green { background: #166534; color: #bbf7d0; }
   .badge-blue { background: #1e3a5f; color: #93c5fd; }
   .badge-orange { background: #78350f; color: #fed7aa; }
-  .two-col { display: flex; gap: 2em; }
+  .two-col { display: flex; gap: 2em; align-items: flex-start; }
   .two-col > div { flex: 1; }
-  .step-card { background: #1e293b; border-radius: 12px; padding: 0.8em 1.2em; margin: 0.4em 0; border-left: 4px solid #60a5fa; text-align: left; font-size: 0.7em; }
-  .step-card .step-num { display: inline-block; width: 1.8em; height: 1.8em; line-height: 1.8em; text-align: center; background: #2563eb; border-radius: 50%; margin-right: 0.5em; font-weight: bold; font-size: 0.9em; }
-  .icon-list { list-style: none; font-size: 0.75em; text-align: left; }
-  .icon-list li { margin: 0.5em 0; }
+  .dim { opacity: 0.5; }
+  .emoji-big { font-size: 2em; display: block; margin-bottom: 0.3em; }
   .pain-table th:first-child { width: 16%; }
   .pain-table th:nth-child(2) { width: 42%; }
   .pain-table th:nth-child(3) { width: 42%; }
-  .emoji-big { font-size: 2em; display: block; margin-bottom: 0.3em; }
-  .dim { opacity: 0.5; }
-  .cmd-line { font-family: 'JetBrains Mono', monospace; font-size: 0.7em; color: #93c5fd; }
-  .arrow-down { font-size: 2em; color: #60a5fa; }
+
+  /* Mermaid in slides */
+  .reveal .mermaid { margin: 0 auto; font-size: 0.55em; }
+  .reveal .mermaid svg { max-height: none !important; }
 </style>
 </head>
 <body>
@@ -67,10 +65,10 @@
       <tr><th>痛点</th><th>传统方式</th><th>ML Platform</th></tr>
     </thead>
     <tbody>
-      <tr><td>📂 数据分散</td><td>手动 <code>pd.read_csv</code>、清洗、<code>matplotlib</code> 画图</td><td><code>mlp data upload</code> → 自动画像</td></tr>
+      <tr><td>📂 数据分散</td><td>手动 pd.read_csv、清洗、matplotlib 画图</td><td><code>mlp data upload</code> → 自动画像</td></tr>
       <tr><td>🧪 训练模型</td><td>手写 sklearn + MLflow 集成代码</td><td><code>mlp experiments run-sklearn</code> → 自动追踪</td></tr>
       <tr><td>📋 多任务调度</td><td>开 5 个终端手动排队</td><td><code>mlp queue watch</code> → FIFO 自动调度</td></tr>
-      <tr><td>🚀 部署模型</td><td><code>docker build</code> + <code>kubectl apply</code></td><td><code>mlp deployments create</code> → 内存加载，立即可用</td></tr>
+      <tr><td>🚀 部署模型</td><td>docker build + kubectl apply</td><td><code>mlp deployments create</code> → 内存加载，立即可用</td></tr>
       <tr><td>📊 线上监控</td><td>自建 Grafana + Prometheus</td><td><code>mlp monitor metrics</code> → 一键查看</td></tr>
     </tbody>
   </table>
@@ -79,23 +77,44 @@
   </p>
 </section>
 
-<!-- ===== Architecture ===== -->
+<!-- ===== Architecture (Mermaid) ===== -->
 <section>
   <h2>🏗 架构总览</h2>
-  <pre style="font-size:0.5em; line-height:1.8; background:#111827; width:90%;">
-┌─────────────────────────────────────────────────────┐
-│                   <span style="color:#60a5fa">用户交互层</span>                        │
-│  🖥 mlp CLI (typer+rich) &nbsp;&nbsp;│&nbsp;&nbsp; 🐍 Python SDK (httpx)  │
-├─────────────────────────────────────────────────────┤
-│             🚀 <span style="color:#60a5fa">REST API</span> (FastAPI, async)             │
-│  /data &nbsp; /experiments &nbsp; /models &nbsp; /deployments &nbsp; /monitoring  │
-├─────────────────────────────────────────────────────┤
-│  <span style="color:#93c5fd">PostgreSQL/SQLite</span> &nbsp; <span style="color:#fed7aa">MLflow</span> &nbsp; <span style="color:#bbf7d0">培训队列</span> &nbsp; <span style="color:#c4b5fd">内存推理</span> │
-└─────────────────────────────────────────────────────┘
-  </pre>
-  <div style="margin-top:0.8em; font-size:0.55em; opacity:0.7;">
-    默认 SQLite + 本地 MLflow — 零 Docker 依赖，开发环境即开即用
+  <div class="mermaid" style="width:90%;">
+graph TD
+    subgraph UI["🖥 用户交互层"]
+        CLI["mlp CLI<br/>typer + rich"]
+        SDK["🐍 Python SDK<br/>httpx async"]
+    end
+
+    subgraph API["🚀 REST API<br/>FastAPI :8000"]
+        D1["/data"]
+        D2["/experiments"]
+        D3["/models"]
+        D4["/deployments"]
+        D5["/monitoring"]
+    end
+
+    subgraph INFRA["⚙ 基础设施"]
+        DB[("PostgreSQL<br/>SQLite")]
+        MLflow["MLflow<br/>实验追踪"]
+        Q["📋 训练队列<br/>FIFO Worker"]
+        INF["🧠 内存推理<br/>Ray Serve"]
+    end
+
+    CLI --> API
+    SDK --> API
+    D1 --> DB
+    D2 --> MLflow
+    D2 --> Q
+    D3 --> MLflow
+    D4 --> INF
+    D5 --> DB
+    Q -->|completed| DB
   </div>
+  <p class="dim" style="font-size:0.55em; margin-top:0.3em;">
+    默认 SQLite + 本地 MLflow — 零 Docker 依赖，即开即用
+  </p>
 </section>
 
 <!-- ===== Quick Start ===== -->
@@ -210,47 +229,53 @@ asyncio.run(main())
     </div>
   </div>
   <p class="dim" style="font-size:0.5em; margin-top:0.2em;">
-    全异步 (httpx + asyncio) · 上下文管理器 · 自动错误处理 &nbsp;|&nbsp; 也可以 <code>client.set_token()</code> 复用 token 而不进入 context manager
+    全异步 (httpx + asyncio) · 上下文管理器 · 自动错误处理
   </p>
 </section>
 
-<!-- ===== Training Queue ===== -->
+<!-- ===== Training Queue (Mermaid + API output) ===== -->
 <section>
   <h2>📋 训练队列 (FIFO)</h2>
-  <div style="margin-bottom:0.4em; font-size:0.55em; text-align:left;">
-    <strong>问题</strong>: 10 个用户同时提交训练 → 资源争抢、OOM、互相覆盖 &nbsp;|&nbsp; <strong>方案</strong>: asyncio 后台 worker，一次只跑一个
+  <div style="margin-bottom:0.3em; font-size:0.55em; text-align:left;">
+    <strong>问题</strong>: 10 个用户同时提交训练 → 资源争抢、OOM &nbsp;|&nbsp; <strong>方案</strong>: asyncio 后台 worker，一次只跑一个
   </div>
   <div class="two-col">
     <div>
-      <pre style="font-size:0.36em; line-height:1.55; background:#111827;">
-<span style="color:#60a5fa;">POST /experiments/{id}/run-sklearn</span>
-<span style="color:#60a5fa;">POST /experiments/{id}/enqueue</span>
-          <span style="color:#6b7280;">↓</span>
-<span style="color:#93c5fd;">┌───────────────┐</span>
-<span style="color:#93c5fd;">│  TrainingQueue │</span>  <span style="color:#6b7280;">singleton</span>
-<span style="color:#93c5fd;">│  _queue: [...] │</span>  <span style="color:#6b7280;">asyncio.Lock</span>
-<span style="color:#93c5fd;">├───────────────┤</span>
-<span style="color:#6b7280;">│ #1 queued     │</span>
-<span style="color:#fbbf24;">│ #2 running ▸  │</span>  <span style="color:#fbbf24;">background worker</span>
-<span style="color:#6b7280;">│ #3 queued     │</span>  <span style="color:#6b7280;">一次只跑一个</span>
-<span style="color:#22c55e;">│ #4 completed  │</span>
-<span style="color:#22c55e;">└───────────────┘</span>
-          <span style="color:#6b7280;">↓</span>
-<span style="color:#22c55e;">Experiment.status = 'completed'</span>
-<span style="color:#22c55e;">Experiment.mlflow_run_id = ...</span>
-      </pre>
+      <div class="mermaid" style="width:100%;">
+sequenceDiagram
+    actor U1 as 👤 Alice
+    actor U2 as 👤 Bob
+    participant Q as 📋 TrainingQueue
+    participant W as ⚙ Worker
+    participant DB as 🗄 DB
+
+    U1->>Q: enqueue(exp-a)
+    Q-->>U1: position #1
+    U2->>Q: enqueue(exp-b)
+    Q-->>U2: position #2
+    U1->>Q: enqueue(exp-c)
+    Q-->>U1: position #3
+
+    W-->>Q: poll()
+    Q->>W: exp-a ▸ running
+    W->>DB: status = 'completed'
+    W-->>Q: poll()
+    Q->>W: exp-b ▸ running
+    W->>DB: status = 'completed'
+    Note over Q,W: 一次只有一个 running
+      </div>
     </div>
     <div>
-      <pre style="font-size:0.36em; line-height:1.5; background:#111827;">
+      <pre style="font-size:0.38em; line-height:1.5; background:#111827;">
 <span style="color:#60a5fa;">GET /api/experiments/queue/status</span>
 
-┏━━┳━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━━━━┓
-┃<span style="color:#93c5fd;">P</span>┃<span style="color:#93c5fd;">Experiment</span>┃<span style="color:#93c5fd;">User</span> ┃<span style="color:#93c5fd;">Run</span> ┃<span style="color:#93c5fd;">Status</span>  ┃
-┡━━╇━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━━━━┩
-│<span style="color:#fbbf24;">1</span>│iris-cls  │bob   │8ced │<span style="color:#22c55e;">complete</span>│
-│<span style="color:#fbbf24;">2</span>│diabetes  │alice │—   │<span style="color:#fbbf24;">running</span> │
-│<span style="color:#6b7280;">3</span>│auto-mpg  │carol │—   │<span style="color:#6b7280;">queued</span>  │
-└──┴──────────┴──────┴──────┴──────────┘
+┏━━┳━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━━━━┓
+┃<span style="color:#93c5fd;">P</span>┃<span style="color:#93c5fd;"> Experiment</span>┃<span style="color:#93c5fd;">User</span> ┃<span style="color:#93c5fd;">Run</span> ┃<span style="color:#93c5fd;">Status</span>  ┃
+┡━━╇━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━━━━┩
+│<span style="color:#fbbf24;">1</span>│iris-cls│bob   │8ced │<span style="color:#22c55e;">complete</span>│
+│<span style="color:#fbbf24;">2</span>│diabetes│alice │—   │<span style="color:#fbbf24;">running</span> │
+│<span style="color:#6b7280;">3</span>│auto-mpg│carol │—   │<span style="color:#6b7280;">queued</span>  │
+└──┴────────┴──────┴──────┴──────────┘
 
 <span style="color:#22c55e;">comp:3</span> <span style="color:#fbbf24;">run:diabetes</span> <span style="color:#6b7280;">pend:1</span> <span style="color:#ef4444;">fail:0</span>
 
@@ -264,21 +289,25 @@ asyncio.run(main())
   </div>
 </section>
 
-<!-- ===== Model Deploy Flow ===== -->
+<!-- ===== Model Deploy Flow (Mermaid) ===== -->
 <section>
   <h2>🚀 模型部署 & 推理</h2>
-  <div style="text-align:left;">
-    <div class="step-card"><span class="step-num">1</span> <strong>训练</strong> &mdash; <code>mlp experiments run-sklearn &lt;exp-id&gt;</code></div>
-    <div style="text-align:center; font-size:1.5em; color:#60a5fa;">↓</div>
-    <div class="step-card"><span class="step-num">2</span> <strong>注册</strong> &mdash; <code>mlp models register -n iris-model -e &lt;exp-id&gt;</code></div>
-    <div style="text-align:center; font-size:1.5em; color:#60a5fa;">↓</div>
-    <div class="step-card"><span class="step-num">3</span> <strong>部署</strong> &mdash; <code>mlp deployments create -m &lt;model-id&gt;</code></div>
-    <div style="text-align:center; font-size:1.5em; color:#60a5fa;">↓</div>
-    <div class="step-card"><span class="step-num">4</span> <strong>预测</strong> &mdash; <code>mlp deployments predict &lt;dep-id&gt; -d '{"f1":5.1}'</code></div>
+  <div class="mermaid" style="width:90%;">
+graph LR
+    T["🧪 训练<br/><code>mlp experiments<br/>run-sklearn</code>"] -->|"MLflow Run ID"| R["🤖 注册模型<br/><code>mlp models<br/>register</code>"]
+    R -->|"model_id"| D["🚀 部署<br/><code>mlp deployments<br/>create</code>"]
+    D -->|"endpoint"| P["🔮 在线预测<br/><code>mlp deployments<br/>predict</code>"]
+
+    style T fill:#1e3a5f,stroke:#60a5fa,color:#fff
+    style R fill:#1e3a5f,stroke:#93c5fd,color:#fff
+    style D fill:#1e3a5f,stroke:#fbbf24,color:#fff
+    style P fill:#166534,stroke:#22c55e,color:#fff
   </div>
-  <p style="margin-top:1em; font-size:0.6em; opacity:0.7;">
-    本地内存推理 (默认) &nbsp;|&nbsp; 支持 Ray Serve 扩展
-  </p>
+  <div style="margin-top:0.5em; display:flex; gap:1em; justify-content:center; font-size:0.55em;">
+    <div class="badge badge-blue">模型从 MLflow 自动加载</div>
+    <div class="badge badge-green">本地内存推理  &lt;5ms 延迟</div>
+    <div class="badge badge-orange">可选 Ray Serve 扩展</div>
+  </div>
 </section>
 
 <!-- ===== Monitoring ===== -->
@@ -317,7 +346,7 @@ Feature drifts:
       </pre>
       <p style="font-size:0.55em; opacity:0.7; margin-top:0.5em;">
         🧠 基于 <strong>Evidently AI</strong> + <strong>z-score</strong> 漂移检测<br>
-        阈值: |z| > 2.0 触发告警
+        阈值: |z| &gt; 2.0 触发告警
       </p>
     </div>
   </div>
@@ -333,7 +362,7 @@ Feature drifts:
     <tbody>
       <tr><td><code>/api/auth</code></td><td>POST register / login · GET me / users</td><td>混合</td><td>bcrypt + JWT</td></tr>
       <tr><td><code>/api/data</code></td><td>POST upload · GET list/:id/profile/preview · DELETE</td><td>写需</td><td>CSV → 自动 pandas 画像</td></tr>
-      <tr><td><code>/api/experiments</code></td><td>GET list/<span style="color:#fbbf24;">ids</span> · POST create/run-sklearn/<span style="color:#fbbf24;">enqueue</span><br>GET :id/mlflow-metrics · GET compare · GET queue/status</td><td>写需</td><td>sklearn + MLflow 训练 + FIFO 队列</td></tr>
+      <tr><td><code>/api/experiments</code></td><td>GET list/<span style="color:#fbbf24;">ids</span> · POST create/run-sklearn/<span style="color:#fbbf24;">enqueue</span><br>GET :id/mlflow-metrics · GET compare · GET queue/status</td><td>写需</td><td>sklearn + MLflow + FIFO 队列</td></tr>
       <tr><td><code>/api/models</code></td><td>GET list/<span style="color:#fbbf24;">ids</span> · POST register · POST promote<br>GET :id/download · DELETE</td><td>写需</td><td>版本管理 + pickle 下载</td></tr>
       <tr><td><code>/api/deployments</code></td><td>GET list/:id · POST create/predict/stop · DELETE</td><td>写需</td><td>内存推理 + 推理日志</td></tr>
       <tr><td><code>/api/monitoring</code></td><td>GET :id/metrics?time_range= · GET :id/drift</td><td>否</td><td>延迟/错误率/漂移</td></tr>
@@ -352,7 +381,7 @@ Feature drifts:
 <span style="color:#6b7280;"># 1. 启动服务</span>
 uv run uvicorn backend.main:app --reload
 
-<span style="color:#6b7280;"># 2. 注册 & 登录</span>
+<span style="color:#6b7280;"># 2. 注册 &amp; 登录</span>
 mlp auth login --register -u alice -e alice@test.com -p demo12345
 
 <span style="color:#6b7280;"># 3. 上传数据 + 创建实验</span>
@@ -361,7 +390,7 @@ mlp experiments create -n iris-test -d <span style="color:#fbbf24;">&lt;ds-id&gt
 
 <span style="color:#6b7280;"># 4. 提交训练 (自动入队)</span>
 mlp experiments run-sklearn <span style="color:#fbbf24;">&lt;exp-id&gt;</span>      <span style="color:#6b7280;">← 入 FIFO 队列</span>
-mlp queue watch                        <span style="color:#6b7280;">← 看实时状态 + CPU/RAM</span>
+mlp queue watch                        <span style="color:#6b7280;">← 实时状态 + CPU/RAM</span>
 
 <span style="color:#6b7280;"># 5. 查看指标</span>
 mlp experiments metrics <span style="color:#fbbf24;">&lt;exp-id&gt;</span>      <span style="color:#6b7280;"># accuracy: 0.9667 ✓</span>
@@ -372,7 +401,7 @@ mlp deployments create -m <span style="color:#fbbf24;">&lt;model-id&gt;</span>
 mlp deployments predict <span style="color:#fbbf24;">&lt;dep-id&gt;</span> -d <span style="color:#22c55e;">'{...features...}'</span>
 <span style="color:#6b7280;"># ✓ Prediction: ["setosa"]</span>
 
-<span style="color:#6b7280;"># 7. 监控 & 系统</span>
+<span style="color:#6b7280;"># 7. 监控 &amp; 系统</span>
 mlp monitor metrics <span style="color:#fbbf24;">&lt;dep-id&gt;</span> --range 1h
 mlp status
 </pre>
@@ -485,7 +514,7 @@ All Model IDs
   </table>
 </section>
 
-<!-- ===== Project Status ===== -->
+<!-- ===== Project Scale ===== -->
 <section>
   <h2>📁 项目规模</h2>
   <table style="font-size:0.55em;">
@@ -525,7 +554,50 @@ All Model IDs
 
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>
+  // Init Mermaid
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#1e3a5f',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#60a5fa',
+      lineColor: '#60a5fa',
+      secondaryColor: '#1e293b',
+      tertiaryColor: '#0f172a',
+      fontSize: '18px',
+    },
+    flowchart: { useMaxWidth: true, htmlLabels: true },
+    sequence: { useMaxWidth: true, actorMargin: 60, messageMargin: 30 },
+  });
+
+  // Render Mermaid diagrams when slides change
+  let mermaidRendered = new Set();
+  async function renderMermaid(slide) {
+    const diagrams = slide.querySelectorAll('.mermaid:not([data-processed])');
+    for (const d of diagrams) {
+      const id = 'mermaid-' + Math.random().toString(36).slice(2, 8);
+      const code = d.textContent;
+      try {
+        const { svg } = await mermaid.render(id, code);
+        d.innerHTML = svg;
+        d.setAttribute('data-processed', 'true');
+      } catch (e) {
+        d.innerHTML = '<pre style="color:red">Mermaid error: ' + e.message + '</pre>';
+      }
+    }
+  }
+
+  Reveal.on('slidechanged', event => {
+    renderMermaid(event.currentSlide);
+  });
+  // Also render initial slide
+  Reveal.on('ready', event => {
+    renderMermaid(event.currentSlide);
+  });
+
   Reveal.initialize({
     hash: true,
     slideNumber: 'c/t',
