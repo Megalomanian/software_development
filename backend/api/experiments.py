@@ -32,6 +32,66 @@ async def create_experiment(
     return await service.create_experiment(data)
 
 
+# ── fixed-path routes (must come before /{experiment_id}) ────────────────────
+
+
+@router.get("/ids")
+async def list_experiment_ids(db: AsyncSession = Depends(get_db)):
+    """Return all experiment IDs with names (no pagination).
+
+    Useful for CLI auto-completion and quick ID lookups.
+    """
+    result = await db.execute(
+        select(Experiment.id, Experiment.name, Experiment.status)
+        .order_by(Experiment.created_at.desc())
+    )
+    return [
+        {"id": row[0], "name": row[1], "status": row[2]}
+        for row in result.all()
+    ]
+
+
+@router.get("/compare")
+async def compare_experiments(
+    ids: str, db: AsyncSession = Depends(get_db)
+):
+    """Compare metrics across multiple experiments.
+
+    Query: GET /api/experiments/compare?ids=uuid1,uuid2,uuid3
+    """
+    id_list = [i.strip() for i in ids.split(",") if i.strip()]
+    if not id_list:
+        raise HTTPException(status_code=400, detail="No experiment IDs provided")
+
+    result = await db.execute(
+        select(Experiment).where(Experiment.id.in_(id_list))
+    )
+    experiments = result.scalars().all()
+
+    return [
+        {
+            "id": e.id,
+            "name": e.name,
+            "target_column": e.target_column,
+            "problem_type": e.problem_type,
+            "status": e.status,
+            "mlflow_run_id": e.mlflow_run_id,
+            "metrics": e.metrics,
+            "created_at": str(e.created_at),
+        }
+        for e in experiments
+    ]
+
+
+@router.get("/queue/status")
+async def queue_status():
+    """Get the training queue status."""
+    return get_queue().get_status()
+
+
+# ── parameterised routes ─────────────────────────────────────────────────────
+
+
 @router.get("/{experiment_id}")
 async def get_experiment(experiment_id: str, db: AsyncSession = Depends(get_db)):
     service = TrainingService(db)
@@ -106,38 +166,6 @@ async def delete_experiment(
     return {"deleted": experiment_id, "name": experiment.name}
 
 
-@router.get("/compare")
-async def compare_experiments(
-    ids: str, db: AsyncSession = Depends(get_db)
-):
-    """Compare metrics across multiple experiments.
-
-    Query: GET /api/experiments/compare?ids=uuid1,uuid2,uuid3
-    """
-    id_list = [i.strip() for i in ids.split(",") if i.strip()]
-    if not id_list:
-        raise HTTPException(status_code=400, detail="No experiment IDs provided")
-
-    result = await db.execute(
-        select(Experiment).where(Experiment.id.in_(id_list))
-    )
-    experiments = result.scalars().all()
-
-    return [
-        {
-            "id": e.id,
-            "name": e.name,
-            "target_column": e.target_column,
-            "problem_type": e.problem_type,
-            "status": e.status,
-            "mlflow_run_id": e.mlflow_run_id,
-            "metrics": e.metrics,
-            "created_at": str(e.created_at),
-        }
-        for e in experiments
-    ]
-
-
 @router.post("/{experiment_id}/enqueue")
 async def enqueue_experiment(
     experiment_id: str,
@@ -155,10 +183,3 @@ async def enqueue_experiment(
         experiment_id, experiment.name,
         username=current_user.username,
     )
-
-
-@router.get("/queue/status")
-async def queue_status():
-    """Get the training queue status."""
-    return get_queue().get_status()
-

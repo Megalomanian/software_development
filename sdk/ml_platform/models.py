@@ -12,6 +12,12 @@ class ModelsAPI:
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client
 
+    async def ids(self) -> list[dict[str, Any]]:
+        """Get all model IDs with names and versions (no pagination)."""
+        resp = await self._client.get("/api/models/ids")
+        resp.raise_for_status()
+        return resp.json()
+
     async def list(self, offset: int = 0, limit: int = 20) -> list[dict[str, Any]]:
         resp = await self._client.get(
             "/api/models/", params={"offset": offset, "limit": limit}

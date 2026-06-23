@@ -21,6 +21,22 @@ async def list_models(
     return await service.list_models(offset, limit)
 
 
+@router.get("/ids")
+async def list_model_ids(db: AsyncSession = Depends(get_db)):
+    """Return all model IDs with names and versions (no pagination).
+
+    Useful for CLI auto-completion and quick ID lookups.
+    """
+    result = await db.execute(
+        select(ModelVersion.id, ModelVersion.name, ModelVersion.version, ModelVersion.status)
+        .order_by(ModelVersion.created_at.desc())
+    )
+    return [
+        {"id": row[0], "name": row[1], "version": row[2], "status": row[3]}
+        for row in result.all()
+    ]
+
+
 @router.get("/{model_id}")
 async def get_model(model_id: str, db: AsyncSession = Depends(get_db)):
     service = ModelService(db)

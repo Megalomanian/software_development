@@ -11,6 +11,12 @@ class ExperimentsAPI:
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client
 
+    async def ids(self) -> list[dict[str, Any]]:
+        """Get all experiment IDs with names (no pagination)."""
+        resp = await self._client.get("/api/experiments/ids")
+        resp.raise_for_status()
+        return resp.json()
+
     async def list(self, offset: int = 0, limit: int = 20) -> list[dict[str, Any]]:
         resp = await self._client.get(
             "/api/experiments/", params={"offset": offset, "limit": limit}

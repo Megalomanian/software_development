@@ -377,6 +377,36 @@ def exp_list(
     asyncio.run(_run())
 
 
+@exp_app.command("ids")
+def exp_ids():
+    """List all experiment IDs and names (no pagination)."""
+    async def _run():
+        c = _require_auth()
+        try:
+            rows = await c.experiments.ids()
+            if not rows:
+                console.print("[dim]No experiments found.[/dim]")
+                return
+            status_style = {
+                "completed": "[green]completed[/green]",
+                "running": "[yellow]running[/yellow]",
+                "pending": "[dim]pending[/dim]",
+                "failed": "[red]failed[/red]",
+            }
+            table = Table(title="All Experiment IDs", header_style="bold cyan", border_style="grey50")
+            table.add_column("ID", style="dim")
+            table.add_column("Name", style="bold")
+            table.add_column("Status")
+            for r in rows:
+                s = status_style.get(r.get("status", ""), r.get("status", "-"))
+                table.add_row(r["id"], r["name"], s)
+            console.print(table)
+            console.print(f"[dim]{len(rows)} experiment(s) total[/dim]")
+        finally:
+            await c.close()
+    asyncio.run(_run())
+
+
 @exp_app.command("get")
 def exp_get(
     experiment_id: str = typer.Argument(..., help="Experiment UUID"),
@@ -693,6 +723,36 @@ def models_list(
                 ("Framework", "framework"), ("Status", "status"), ("Created", "created_at"),
             ])
             console.print(table)
+        finally:
+            await c.close()
+    asyncio.run(_run())
+
+
+@models_app.command("ids")
+def models_ids():
+    """List all model IDs and names (no pagination)."""
+    async def _run():
+        c = _require_auth()
+        try:
+            rows = await c.models.ids()
+            if not rows:
+                console.print("[dim]No models registered.[/dim]")
+                return
+            status_style = {
+                "registered": "[green]registered[/green]",
+                "promoted": "[bold green]promoted[/bold green]",
+                "archived": "[dim]archived[/dim]",
+            }
+            table = Table(title="All Model IDs", header_style="bold cyan", border_style="grey50")
+            table.add_column("ID", style="dim")
+            table.add_column("Name", style="bold")
+            table.add_column("Version")
+            table.add_column("Status")
+            for r in rows:
+                s = status_style.get(r.get("status", ""), r.get("status", "-"))
+                table.add_row(r["id"], r["name"], str(r.get("version", "-")), s)
+            console.print(table)
+            console.print(f"[dim]{len(rows)} model(s) total[/dim]")
         finally:
             await c.close()
     asyncio.run(_run())
