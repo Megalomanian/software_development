@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from ml_platform.auth import AuthAPI
 from ml_platform.data import DataAPI
 from ml_platform.deployments import DeploymentsAPI
 from ml_platform.experiments import ExperimentsAPI
@@ -19,16 +20,24 @@ class Client:
 
     Args:
         base_url: Base URL of the ML Platform API (default: http://localhost:8000).
+        token: Optional JWT token for authenticated requests.
 
     Example::
 
-        client = Client("http://localhost:8000")
+        client = Client("http://localhost:8000", token="eyJ...")
         datasets = await client.data.list()
     """
 
-    def __init__(self, base_url: str = "http://localhost:8000") -> None:
+    def __init__(
+        self, base_url: str = "http://localhost:8000", token: str | None = None
+    ) -> None:
         self._base_url = base_url.rstrip("/")
-        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=60.0)
+        headers: dict[str, str] = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        self._client = httpx.AsyncClient(
+            base_url=self._base_url, timeout=httpx.Timeout(300.0, connect=10.0), headers=headers
+        )
 
         self.data = DataAPI(self._client)
         self.experiments = ExperimentsAPI(self._client)
@@ -36,6 +45,15 @@ class Client:
         self.deployments = DeploymentsAPI(self._client)
         self.monitoring = MonitoringAPI(self._client)
         self.system = SystemAPI(self._client)
+        self.auth = AuthAPI(self._client)
+
+    def set_token(self, token: str) -> None:
+        """Set or update the JWT token for subsequent requests."""
+        self._client.headers["Authorization"] = f"Bearer {token}"
+
+    def clear_token(self) -> None:
+        """Remove the JWT token."""
+        self._client.headers.pop("Authorization", None)
 
     async def health(self) -> dict[str, Any]:
         """Check API health."""

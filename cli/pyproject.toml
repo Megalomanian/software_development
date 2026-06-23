@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ml-platform-cli"
+version = "0.1.0"
+description = "CLI for the ML Platform — manage the full ML lifecycle from the terminal"
+requires-python = ">=3.12"
+dependencies = [
+    "typer>=0.15.0",
+    "rich>=14.0.0",
+    "ml-platform",
+]
+
+[tool.uv.sources]
+ml-platform = { path = "../sdk", editable = true }
+
+[project.scripts]
+mlp = "ml_platform_cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ml_platform_cli"]
