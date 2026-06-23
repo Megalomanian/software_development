@@ -5,11 +5,14 @@
 ## 架构
 
 ```
-前端 / SDK  →  REST API (FastAPI :8000)  →  Temporal 工作流
-                  │          │                 │
-             PostgreSQL   MinIO/S3         MLflow / Ray Serve
-                  │
-             ClickHouse  ←  Prometheus  ←  API 指标
+CLI / Python SDK  →  REST API (FastAPI :8000)  →  Temporal 工作流
+        │                    │          │                 │
+        │               PostgreSQL   MinIO/S3         MLflow / Ray Serve
+        │                    │
+        │               ClickHouse  ←  Prometheus  ←  API 指标
+        │
+   typer + rich        Swagger /docs
+  (终端命令行)         (交互式文档)
 ```
 
 后端端口 `:8000`，Swagger 文档在 `http://localhost:8000/docs`。
@@ -19,18 +22,127 @@
 ## 快速开始
 
 ```bash
-# 安装
+# 1. 安装后端
 uv sync
-cd sdk && uv sync && cd ..
 
-# 启动（本地开发，无需 Docker）
+# 2. 启动服务（本地开发，SQLite + MLflow 本地存储，无需 Docker）
+MLP_DATABASE_URL="sqlite+aiosqlite:///./mlp.db" \
+MLP_MLFLOW_TRACKING_URI="sqlite:///./mlflow.db" \
 uv run uvicorn backend.main:app --reload
 
-# 端到端演示（自动创建临时数据库）
-uv run python demo_full_pipeline.py
+# 3. 安装 CLI
+cd cli && uv sync && cd ..
+
+# 4. 登录
+./cli/.venv/bin/mlp auth login --register -u alice -e alice@test.com -p secret123
+
+# 5. 走通全流程
+./cli/.venv/bin/mlp data upload iris.csv                    # 上传数据
+./cli/.venv/bin/mlp experiments create -n demo -d <id> -t species --type classification
+./cli/.venv/bin/mlp experiments run-sklearn <exp-id>         # 训练
+./cli/.venv/bin/mlp experiments metrics <exp-id>             # 查看指标
 ```
 
 服务启动后访问 `http://localhost:8000/docs` 查看交互式 API 文档。
+
+---
+
+## CLI 命令参考
+
+`mlp` 是 ML Platform 的命令行工具，基于 typer + rich，支持彩色表格、实时监控面板、自动 token 管理。
+
+### 安装
+```bash
+cd cli && uv sync
+./cli/.venv/bin/mlp --help
+```
+
+### 命令总览
+
+```
+mlp
+├── auth login/logout/whoami     ← 认证管理（token 自动保存到 ~/.mlp/）
+├── data upload/list/get/        ← 数据：上传、列表、详情、画像、预览
+│        profile/preview/delete
+├── experiments list/get/create/ ← 实验：CRUD、sklearn 训练、指标、对比
+│        run/run-sklearn/metrics/
+│        compare/delete/enqueue
+├── queue status/watch           ← 训练队列：查看 / 实时刷新
+├── models list/get/register/    ← 模型：注册、晋升、下载 pickle
+│        promote/delete/download
+├── deployments list/get/create/ ← 部署：上线、停止、在线预测
+│        stop/delete/predict
+├── monitor metrics/drift        ← 监控：请求指标、漂移检测
+├── status                       ← 系统总览（实体计数 + 最近实验 + 运行中部署）
+└── health                       ← 快速健康检查
+```
+
+### 常用示例
+
+```bash
+# ── 认证 ──
+mlp auth login --register -u alice -e alice@test.com -p secret123
+mlp auth whoami
+mlp auth logout
+
+# ── 数据 ──
+mlp data upload data.csv
+mlp data list
+mlp data profile <dataset-id>      # 数值列: mean/std/min/max/histogram
+mlp data preview <dataset-id> -n 20
+
+# ── 实验 ──
+mlp experiments list
+mlp experiments create -n my-exp -d <dataset-id> -t target --type classification
+mlp experiments run-sklearn <exp-id>
+mlp experiments metrics <exp-id>    # rich 表格展示 accuracy/mse/r2
+mlp experiments compare <id1> <id2> <id3>
+
+# ── 训练队列 ──
+mlp experiments enqueue <exp-id>    # 加入 FIFO 队列
+mlp queue status                    # 当前队列状态
+mlp queue watch                     # 实时刷新面板 (Ctrl+C 退出)
+
+# ── 模型 ──
+mlp models list
+mlp models register -n my-model -e <exp-id>
+mlp models promote <model-id>
+mlp models download <model-id> -o model.pkl
+
+# ── 部署 ──
+mlp deployments create -m <model-id>
+mlp deployments list
+mlp deployments predict <dep-id> -d '{"f1":5.1,"f2":3.5,"f3":1.4,"f4":0.2}'
+mlp deployments stop <dep-id>
+
+# ── 监控 ──
+mlp monitor metrics <dep-id> --range 24h
+mlp monitor drift <dep-id>
+
+# ── 系统 ──
+mlp status    # → Datasets: 3  Experiments: 5  Models: 2  Deployments: 1 (1 running)
+mlp health
+```
+
+### Token 管理
+
+登录成功后 token 自动保存到 `~/.mlp/config.json`，后续所有需鉴权的命令自动携带。
+
+```json
+{
+  "token": "eyJ...",
+  "server": "http://localhost:8000",
+  "user": {"username": "alice", "email": "alice@test.com", "role": "user"}
+}
+```
+
+### 依赖
+
+| 工具 | 用途 |
+|------|------|
+| [typer](https://typer.tiangolo.com/) | CLI 框架 |
+| [rich](https://rich.readthedocs.io/) | 彩色表格、面板 |
+| `ml-platform` (SDK) | API 封装（本地 path 依赖） |
 
 ---
 
@@ -787,10 +899,16 @@ deploying ──→ running ──→ stopped
 │   │   ├── training_queue.py        # FIFO 训练任务队列
 │   │   └── ray_serve_manager.py     # Ray Serve 备选方案
 │   ├── models_db/           # SQLAlchemy ORM (Dataset, Experiment, ModelVersion, Deployment, InferenceLog, User)
-│   ├── core/                # 配置 (config.py)、依赖注入 (dependencies.py)、认证 (auth.py)、中间件 (middleware.py)
+│   ├── core/                # 配置、依赖注入、认证、中间件
 │   ├── workflows/           # Temporal 工作流
-│   └── tests/               # 50 个测试 (含 auth + queue + e2e)
-├── sdk/ml_platform/         # Python SDK (client, data, experiments, models, deployments, monitoring, auth, system)
+│   └── tests/               # 54 个测试 (含 auth + queue + multi-enqueue + e2e)
+├── sdk/ml_platform/         # Python SDK
+│   ├── client.py            # Client 类 (支持 token)
+│   ├── auth.py              # AuthAPI (register, login, me, list)
+│   └── ...                  # data, experiments, models, deployments, monitoring, system
+├── cli/ml_platform_cli/     # 命令行工具 (typer + rich)
+│   ├── main.py              # mlp 命令入口 (30+ 命令)
+│   └── config.py            # Token 持久化 (~/.mlp/config.json)
 ├── infra/                   # Prometheus 配置
 ├── demo_full_pipeline.py    # 全流程演示脚本
 ├── docker-compose.yml       # 基础设施服务
