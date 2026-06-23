@@ -31,10 +31,6 @@
   .pain-table th:first-child { width: 16%; }
   .pain-table th:nth-child(2) { width: 42%; }
   .pain-table th:nth-child(3) { width: 42%; }
-
-  /* Mermaid in slides */
-  .reveal .mermaid { margin: 0 auto; font-size: 0.55em; }
-  .reveal .mermaid svg { max-height: none !important; }
 </style>
 </head>
 <body>
@@ -80,40 +76,18 @@
 <!-- ===== Architecture (Mermaid) ===== -->
 <section>
   <h2>🏗 架构总览</h2>
-  <div class="mermaid" style="width:90%;">
-graph TD
-    subgraph UI["🖥 用户交互层"]
-        CLI["mlp CLI<br/>typer + rich"]
-        SDK["🐍 Python SDK<br/>httpx async"]
-    end
-
-    subgraph API["🚀 REST API<br/>FastAPI :8000"]
-        D1["/data"]
-        D2["/experiments"]
-        D3["/models"]
-        D4["/deployments"]
-        D5["/monitoring"]
-    end
-
-    subgraph INFRA["⚙ 基础设施"]
-        DB[("PostgreSQL<br/>SQLite")]
-        MLflow["MLflow<br/>实验追踪"]
-        Q["📋 训练队列<br/>FIFO Worker"]
-        INF["🧠 内存推理<br/>Ray Serve"]
-    end
-
-    CLI --> API
-    SDK --> API
-    D1 --> DB
-    D2 --> MLflow
-    D2 --> Q
-    D3 --> MLflow
-    D4 --> INF
-    D5 --> DB
-    Q -->|completed| DB
-  </div>
+  <img src="diagrams/architecture.png" alt="架构总览" style="max-width:90%; max-height:550px;">
   <p class="dim" style="font-size:0.55em; margin-top:0.3em;">
     默认 SQLite + 本地 MLflow — 零 Docker 依赖，即开即用
+  </p>
+</section>
+
+<!-- ===== Data Flow ===== -->
+<section>
+  <h2>📂 数据全流程</h2>
+  <img src="diagrams/data-flow.png" alt="数据全流程" style="max-width:97%; max-height:480px;">
+  <p class="dim" style="font-size:0.45em; margin-top:0.1em;">
+    CSV Upload → Profile → Experiment → Queue → Train → MLflow → Register → Deploy → Predict → Monitor
   </p>
 </section>
 
@@ -233,6 +207,15 @@ asyncio.run(main())
   </p>
 </section>
 
+<!-- ===== Auth Flow ===== -->
+<section>
+  <h2>🔐 JWT 认证流程</h2>
+  <img src="diagrams/auth-flow.png" alt="JWT认证流程" style="max-width:90%; max-height:500px;">
+  <p class="dim" style="font-size:0.45em; margin-top:0.1em;">
+    bcrypt 密码哈希 &nbsp;|&nbsp; python-jose JWT &nbsp;|&nbsp; Bearer Token &nbsp;|&nbsp; Depends(get_current_user)
+  </p>
+</section>
+
 <!-- ===== Training Queue (Mermaid + API output) ===== -->
 <section>
   <h2>📋 训练队列 (FIFO)</h2>
@@ -241,29 +224,7 @@ asyncio.run(main())
   </div>
   <div class="two-col">
     <div>
-      <div class="mermaid" style="width:100%;">
-sequenceDiagram
-    actor U1 as 👤 Alice
-    actor U2 as 👤 Bob
-    participant Q as 📋 TrainingQueue
-    participant W as ⚙ Worker
-    participant DB as 🗄 DB
-
-    U1->>Q: enqueue(exp-a)
-    Q-->>U1: position #1
-    U2->>Q: enqueue(exp-b)
-    Q-->>U2: position #2
-    U1->>Q: enqueue(exp-c)
-    Q-->>U1: position #3
-
-    W-->>Q: poll()
-    Q->>W: exp-a ▸ running
-    W->>DB: status = 'completed'
-    W-->>Q: poll()
-    Q->>W: exp-b ▸ running
-    W->>DB: status = 'completed'
-    Note over Q,W: 一次只有一个 running
-      </div>
+      <img src="diagrams/training-queue.png" alt="训练队列" style="max-width:100%; max-height:400px;">
     </div>
     <div>
       <pre style="font-size:0.38em; line-height:1.5; background:#111827;">
@@ -292,22 +253,21 @@ sequenceDiagram
 <!-- ===== Model Deploy Flow (Mermaid) ===== -->
 <section>
   <h2>🚀 模型部署 & 推理</h2>
-  <div class="mermaid" style="width:90%;">
-graph LR
-    T["🧪 训练<br/><code>mlp experiments<br/>run-sklearn</code>"] -->|"MLflow Run ID"| R["🤖 注册模型<br/><code>mlp models<br/>register</code>"]
-    R -->|"model_id"| D["🚀 部署<br/><code>mlp deployments<br/>create</code>"]
-    D -->|"endpoint"| P["🔮 在线预测<br/><code>mlp deployments<br/>predict</code>"]
-
-    style T fill:#1e3a5f,stroke:#60a5fa,color:#fff
-    style R fill:#1e3a5f,stroke:#93c5fd,color:#fff
-    style D fill:#1e3a5f,stroke:#fbbf24,color:#fff
-    style P fill:#166534,stroke:#22c55e,color:#fff
-  </div>
+  <img src="diagrams/model-deploy.png" alt="模型部署流程" style="max-width:90%; max-height:350px;">
   <div style="margin-top:0.5em; display:flex; gap:1em; justify-content:center; font-size:0.55em;">
     <div class="badge badge-blue">模型从 MLflow 自动加载</div>
     <div class="badge badge-green">本地内存推理  &lt;5ms 延迟</div>
     <div class="badge badge-orange">可选 Ray Serve 扩展</div>
   </div>
+</section>
+
+<!-- ===== Training Internals ===== -->
+<section>
+  <h2>⚙ sklearn 训练内部流程</h2>
+  <img src="diagrams/training-internals.png" alt="训练内部流程" style="max-width:90%; max-height:520px;">
+  <p class="dim" style="font-size:0.45em; margin-top:0.1em;">
+    pandas &nbsp;|&nbsp; LabelEncoder &nbsp;|&nbsp; RandomForest &nbsp;|&nbsp; MLflow tracking &nbsp;|&nbsp; accuracy / mse / r2
+  </p>
 </section>
 
 <!-- ===== Monitoring ===== -->
@@ -476,28 +436,46 @@ All Model IDs
   </table>
 </section>
 
-<!-- ===== Testing ===== -->
+<!-- ===== ER Diagram ===== -->
+<section>
+  <h2>🗄 数据库 ER 图</h2>
+  <img src="diagrams/er-diagram.png" alt="数据库ER图" style="max-width:95%; max-height:580px;">
+  <p class="dim" style="font-size:0.45em; margin-top:0.2em;">
+    7 表 &nbsp;|&nbsp; 所有主键 UUID String(36) &nbsp;|&nbsp; 共享 TimestampMixin (id, created_at, updated_at)
+  </p>
+</section>
+
+<!-- ===== Testing Summary ===== -->
 <section>
   <h2>✅ 测试覆盖</h2>
-  <div style="display:flex; gap:2em; justify-content:center; align-items:center;">
+  <div style="display:flex; gap:3em; justify-content:center; align-items:center; margin-top:2em;">
     <div style="text-align:center;">
       <span class="emoji-big">🧪</span>
-      <span style="font-size:2.5em; font-weight:900; color:#22c55e;">60</span><br>
-      <span style="font-size:0.7em;">Passed</span>
+      <span style="font-size:3em; font-weight:900; color:#22c55e;">60</span><br>
+      <span style="font-size:0.8em;">Passed</span>
     </div>
     <div style="text-align:center;">
       <span class="emoji-big">⏭</span>
-      <span style="font-size:2.5em; font-weight:900; color:#fbbf24;">2</span><br>
-      <span style="font-size:0.7em;">Skipped (MLflow Server)</span>
+      <span style="font-size:3em; font-weight:900; color:#fbbf24;">2</span><br>
+      <span style="font-size:0.8em;">Skipped</span>
+      <p class="dim" style="font-size:0.5em;">MLflow Server</p>
     </div>
     <div style="text-align:center;">
       <span class="emoji-big">⚡</span>
-      <span style="font-size:2.5em; font-weight:900; color:#60a5fa;">~9min</span><br>
-      <span style="font-size:0.7em;">Total runtime</span>
+      <span style="font-size:3em; font-weight:900; color:#60a5fa;">~9min</span><br>
+      <span style="font-size:0.8em;">Total runtime</span>
     </div>
   </div>
-  <table style="font-size:0.48em; margin-top:1.5em;">
-    <thead><tr><th>模块</th><th>测试数</th><th>覆盖内容</th></tr></thead>
+  <p class="dim" style="font-size:0.55em; margin-top:1.5em;">
+    11 个测试文件 &nbsp;|&nbsp; SQLite 内存数据库 &nbsp;|&nbsp; ASGI in-process transport
+  </p>
+</section>
+
+<!-- ===== Testing Detail ===== -->
+<section>
+  <h2>✅ 测试详情</h2>
+  <table style="font-size:0.52em;">
+    <thead><tr><th>模块</th><th>数</th><th>覆盖内容</th></tr></thead>
     <tbody>
       <tr><td>test_api.py</td><td>1</td><td>健康检查</td></tr>
       <tr><td>test_auth.py</td><td>8</td><td>注册 / 登录 / 重复 / 短密码 / 无 token</td></tr>
@@ -512,6 +490,9 @@ All Model IDs
       <tr><td>test_ids_endpoints.py</td><td>6</td><td>🆕 实验 IDs / 模型 IDs / 路由不冲突</td></tr>
     </tbody>
   </table>
+  <p class="dim" style="font-size:0.5em; margin-top:0.5em;">
+    总计 62 测试 &nbsp;|&nbsp; asyncio + pytest &nbsp;|&nbsp; httpx ASGITransport
+  </p>
 </section>
 
 <!-- ===== Project Scale ===== -->
@@ -554,50 +535,7 @@ All Model IDs
 
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>
-  // Init Mermaid
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: 'dark',
-    themeVariables: {
-      primaryColor: '#1e3a5f',
-      primaryTextColor: '#e2e8f0',
-      primaryBorderColor: '#60a5fa',
-      lineColor: '#60a5fa',
-      secondaryColor: '#1e293b',
-      tertiaryColor: '#0f172a',
-      fontSize: '18px',
-    },
-    flowchart: { useMaxWidth: true, htmlLabels: true },
-    sequence: { useMaxWidth: true, actorMargin: 60, messageMargin: 30 },
-  });
-
-  // Render Mermaid diagrams when slides change
-  let mermaidRendered = new Set();
-  async function renderMermaid(slide) {
-    const diagrams = slide.querySelectorAll('.mermaid:not([data-processed])');
-    for (const d of diagrams) {
-      const id = 'mermaid-' + Math.random().toString(36).slice(2, 8);
-      const code = d.textContent;
-      try {
-        const { svg } = await mermaid.render(id, code);
-        d.innerHTML = svg;
-        d.setAttribute('data-processed', 'true');
-      } catch (e) {
-        d.innerHTML = '<pre style="color:red">Mermaid error: ' + e.message + '</pre>';
-      }
-    }
-  }
-
-  Reveal.on('slidechanged', event => {
-    renderMermaid(event.currentSlide);
-  });
-  // Also render initial slide
-  Reveal.on('ready', event => {
-    renderMermaid(event.currentSlide);
-  });
-
   Reveal.initialize({
     hash: true,
     slideNumber: 'c/t',

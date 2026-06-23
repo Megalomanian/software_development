@@ -1,0 +1,97 @@
+erDiagram
+    User {
+        string id PK "UUID"
+        string username UK "唯一"
+        string email UK "登录凭据"
+        string hashed_password "bcrypt"
+        string role "user"
+        datetime created_at
+        datetime updated_at
+    }
+
+    Dataset {
+        string id PK "UUID"
+        string name "数据集名称"
+        string file_path "CSV路径"
+        string file_type "csv"
+        int row_count
+        int column_count
+        int size_bytes
+        string profile "JSON 画像"
+        int version
+        datetime created_at
+        datetime updated_at
+    }
+
+    DatasetColumn {
+        string id PK "UUID"
+        string dataset_id FK "→ datasets.id"
+        string name "列名"
+        string dtype "int64/float64/object"
+        int null_count
+        float null_ratio
+        int unique_count
+        float mean
+        float std
+        float min_val
+        float max_val
+        string histogram "JSON bins"
+    }
+
+    Experiment {
+        string id PK "UUID"
+        string name "实验名称"
+        string dataset_id FK "→ datasets.id"
+        string target_column "目标列"
+        string problem_type "classification/regression"
+        string mlflow_run_id "MLflow Run ID"
+        string description "文本描述"
+        string metrics "JSON 指标"
+        string params "JSON 超参"
+        string status "pending/running/completed/failed"
+        datetime created_at
+        datetime updated_at
+    }
+
+    ModelVersion {
+        string id PK "UUID"
+        string name "模型名"
+        int version "版本号"
+        string experiment_id FK "→ experiments.id"
+        string mlflow_model_uri "MLflow 模型路径"
+        string framework "sklearn"
+        string metrics "JSON"
+        string artifact_path
+        string status "registered/promoted/archived"
+        datetime created_at
+        datetime updated_at
+    }
+
+    Deployment {
+        string id PK "UUID"
+        string model_version_id FK "→ model_versions.id"
+        string name "部署名"
+        string status "deploying/running/stopped/failed"
+        string ray_serve_app "Ray App 名"
+        string endpoint_url "推理地址"
+        int replicas "副本数"
+        int traffic_percent "流量百分比"
+        datetime created_at
+        datetime updated_at
+    }
+
+    InferenceLog {
+        string id PK "UUID"
+        string deployment_id "→ deployments.id"
+        string request_data "JSON 输入"
+        string response_data "JSON 输出"
+        float latency_ms "推理延迟 ms"
+        string error_message "错误信息"
+        datetime created_at
+    }
+
+    Dataset ||--o{ DatasetColumn : "包含"
+    Dataset ||--o{ Experiment : "使用"
+    Experiment ||--o{ ModelVersion : "训练产生"
+    ModelVersion ||--o{ Deployment : "部署为"
+    Deployment ||--o{ InferenceLog : "产生日志"

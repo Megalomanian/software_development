@@ -1,0 +1,35 @@
+%% sklearn Training Internals
+
+flowchart TD
+    A["🧪 Experiment<br/>target_column + problem_type"] --> B["📂 Load Dataset<br/>pd.read_csv(file_path)"]
+    B --> C{"🔀 Split<br/>train_test_split<br/>80/20"}
+    C --> D["🏷 LabelEncoder<br/>encode object columns"]
+    D --> E{"problem_type?"}
+
+    E -->|classification| F["🌲 RandomForestClassifier<br/>n=100, seed=42"]
+    E -->|regression| G["🌲 RandomForestRegressor<br/>n=100, seed=42"]
+
+    F --> H["model.fit(X_train, y_train)"]
+    G --> H
+    H --> I["model.predict(X_test)"]
+
+    I --> J{"classification?"}
+    J -->|yes| K["📊 accuracy_score"]
+    J -->|no| L["📊 mse + r2_score"]
+
+    K --> M["📈 MLflow Track"]
+    L --> M
+
+    M --> N["log_metric(accuracy/mse/r2)"]
+    N --> O["log_model(sklearn model)"]
+    O --> P["experiment.mlflow_run_id = run_id"]
+    P --> Q["experiment.status = 'completed'"]
+
+    style A fill:#1e3a5f,stroke:#60a5fa,color:#e2e8f0
+    style B fill:#1e293b,stroke:#93c5fd,color:#e2e8f0
+    style F fill:#166534,stroke:#22c55e,color:#e2e8f0
+    style G fill:#166534,stroke:#22c55e,color:#e2e8f0
+    style K fill:#1e3a5f,stroke:#fbbf24,color:#e2e8f0
+    style L fill:#1e3a5f,stroke:#fbbf24,color:#e2e8f0
+    style M fill:#1e293b,stroke:#fed7aa,color:#e2e8f0
+    style Q fill:#166534,stroke:#22c55e,color:#e2e8f0

@@ -1,0 +1,39 @@
+%% ML Platform Architecture Diagram
+
+graph TD
+    subgraph UI["🖥 用户交互层"]
+        CLI["mlp CLI<br/>typer + rich"]
+        SDK["🐍 Python SDK<br/>httpx async"]
+    end
+
+    subgraph API["🚀 REST API<br/>FastAPI :8000"]
+        D1["/data"]
+        D2["/experiments"]
+        D3["/models"]
+        D4["/deployments"]
+        D5["/monitoring"]
+    end
+
+    subgraph INFRA["⚙ 基础设施"]
+        DB[("PostgreSQL<br/>SQLite")]
+        MLflow["MLflow<br/>实验追踪"]
+        Q["📋 训练队列<br/>FIFO Worker"]
+        INF["🧠 内存推理<br/>Ray Serve"]
+    end
+
+    CLI --> API
+    SDK --> API
+    D1 --> DB
+    D2 --> MLflow
+    D2 --> Q
+    D3 --> MLflow
+    D4 --> INF
+    D5 --> DB
+    Q -->|completed| DB
+
+    style CLI fill:#1e3a5f,stroke:#60a5fa,color:#e2e8f0
+    style SDK fill:#1e3a5f,stroke:#60a5fa,color:#e2e8f0
+    style MLflow fill:#1e293b,stroke:#fed7aa,color:#e2e8f0
+    style Q fill:#1e293b,stroke:#bbf7d0,color:#e2e8f0
+    style INF fill:#1e293b,stroke:#c4b5fd,color:#e2e8f0
+    style DB fill:#0f172a,stroke:#93c5fd,color:#e2e8f0

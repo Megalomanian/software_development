@@ -1,0 +1,28 @@
+%% Training Queue FIFO Sequence Diagram
+
+sequenceDiagram
+    actor Alice as 👤 Alice
+    actor Bob as 👤 Bob
+    participant Q as 📋 TrainingQueue
+    participant W as ⚙ Worker
+    participant DB as 🗄 Database
+
+    Alice->>Q: enqueue(exp-a)
+    Q-->>Alice: position #1
+    Bob->>Q: enqueue(exp-b)
+    Q-->>Bob: position #2
+    Alice->>Q: enqueue(exp-c)
+    Q-->>Alice: position #3
+
+    loop FIFO Poll
+        W->>Q: poll()
+        Q->>W: exp-a ▸ running
+        W->>W: sklearn train
+        W->>DB: status=completed
+        W->>Q: poll()
+        Q->>W: exp-b ▸ running
+        W->>W: sklearn train
+        W->>DB: status=completed
+    end
+
+    Note over Q,W: 一次只有一个 training running<br/>asyncio.Lock 保证并发安全

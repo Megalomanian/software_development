@@ -1,0 +1,37 @@
+%% JWT Authentication Flow
+
+sequenceDiagram
+    actor U as 👤 用户
+    participant C as 🖥 CLI / SDK
+    participant A as 🚀 FastAPI
+    participant H as 🔐 bcrypt
+    participant J as 🎫 JWT
+
+    Note over U,J: ── 注册 ──
+    U->>C: register(username, email, password)
+    C->>A: POST /api/auth/register
+    A->>H: hash_password(password)
+    H-->>A: $2b$...hashed
+    A->>A: INSERT INTO users
+    A->>J: create_access_token(sub=user.id)
+    J-->>A: eyJhbG...token
+    A-->>C: {access_token, user}
+    C->>C: save to ~/.mlp/config.json
+
+    Note over U,J: ── 登录 ──
+    U->>C: login(email, password)
+    C->>A: POST /api/auth/login
+    A->>A: SELECT user WHERE email=?
+    A->>H: verify_password(password, hash)
+    H-->>A: ✓ match
+    A->>J: create_access_token(...)
+    J-->>A: eyJhbG...token
+    A-->>C: {access_token}
+
+    Note over U,J: ── API 请求 (已认证) ──
+    U->>C: experiments create
+    C->>A: GET /api/experiments + Bearer token
+    A->>J: decode + verify(token)
+    J-->>A: {sub: user_id}
+    A->>A: get_current_user → User ORM
+    A-->>C: response
