@@ -417,6 +417,7 @@ fetch(`${API_BASE}${path}`, {
 | `/monitoring` | 监控面板 | `GET /api/monitoring` |
 | `/status` | 系统总览 | `GET /api/system/status` |
 
+
 ---
 
 <p align="center">
