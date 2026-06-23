@@ -272,7 +272,7 @@ def data_profile(
                 nulls = col.get("null_count", 0)
                 console.print(f"\n[bold cyan]{name}[/bold cyan] [dim]({dtype})[/dim] — nulls: {nulls}")
 
-                if "mean" in col:
+                if col.get("mean") is not None:
                     items = [
                         ("Mean", f"{col['mean']:.4f}"), ("Std", f"{col['std']:.4f}"),
                         ("Min", f"{col['min']:.4f}"), ("Max", f"{col['max']:.4f}"),
@@ -944,6 +944,34 @@ def health():
         finally:
             await c.close()
     asyncio.run(_run())
+
+
+@app.command("config")
+def config(
+    server: str | None = typer.Option(None, "--server", "-s", help="Set server URL"),
+):
+    """Show or update current config (server, user, token status)."""
+    if server:
+        from ml_platform_cli.config import load_config, save_config
+        cfg = load_config()
+        cfg["server"] = server
+        save_config(cfg)
+        console.print(f"[green]✓[/green] Server set to [bold]{server}[/bold]")
+        return
+
+    from ml_platform_cli.config import get_server, get_token, get_user_info
+    console.print(f"  Server:  [bold]{get_server()}[/bold]")
+    token = get_token()
+    if token:
+        console.print(f"  Token:   [green]{token[:20]}...{token[-8:]}[/green]")
+    else:
+        console.print(f"  Token:   [red]not set[/red]")
+    user = get_user_info()
+    if user:
+        console.print(f"  User:    [bold]{user.get('username','?')}[/bold] [dim]({user.get('email','?')})[/dim]")
+    else:
+        console.print(f"  User:    [dim]not logged in[/dim]")
+    console.print(f"  Env:     MLP_SERVER={'[green]set[/green]' if 'MLP_SERVER' in __import__('os').environ else '[dim]not set[/dim]'}")
 
 
 if __name__ == "__main__":

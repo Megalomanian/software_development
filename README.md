@@ -1,80 +1,124 @@
-# ML Platform
+# 🧠 ML Platform
 
-面向数据分析师的 MLOps 平台。覆盖 **数据接入 → 实验训练 → 模型注册 → 模型部署 → 推理监控** 完整生命周期。
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
+  <img src="https://img.shields.io/badge/fastapi-0.115%2B-green" alt="FastAPI">
+  <img src="https://img.shields.io/badge/sklearn-1.6%2B-orange" alt="sklearn">
+  <img src="https://img.shields.io/badge/license-MIT-brightgreen" alt="License">
+  <img src="https://img.shields.io/badge/tests-54%20passed-success" alt="Tests">
+</p>
 
-## 架构
-
-```
-CLI / Python SDK  →  REST API (FastAPI :8000)  →  Temporal 工作流
-        │                    │          │                 │
-        │               PostgreSQL   MinIO/S3         MLflow / Ray Serve
-        │                    │
-        │               ClickHouse  ←  Prometheus  ←  API 指标
-        │
-   typer + rich        Swagger /docs
-  (终端命令行)         (交互式文档)
-```
-
-后端端口 `:8000`，Swagger 文档在 `http://localhost:8000/docs`。
+<p align="center">
+  <strong>从数据到推理，一行命令就够了。</strong><br>
+  面向数据分析师的端到端 MLOps 平台 — 无需 Docker、无需 Kubernetes、无需前端。
+</p>
 
 ---
 
-## 快速开始
+## 🤔 解决了什么问题？
+
+数据分析师的日常困境：
+
+| 痛点 | 传统方式 | ML Platform |
+|------|---------|-------------|
+| 📂 数据分散在 CSV/Excel 里 | 手动 pandas 读取、清洗、画图 | `mlp data upload` → 自动画像 |
+| 🧪 训练模型要写一堆代码 | 手写 sklearn + MLflow 集成 | `mlp experiments run-sklearn` → 自动追踪 |
+| 📋 多个训练任务互相覆盖 | 打开 5 个终端手动排队 | `mlp queue watch` → FIFO 队列自动调度 |
+| 🚀 部署模型要学 Docker/K8s | `docker build` + `kubectl apply` | `mlp deployments create` → 内存加载，即刻可用 |
+| 📊 线上模型看不到效果 | 自己做 Grafana + Prometheus | `mlp monitor metrics` → 请求量/延迟/错误率一键查 |
+
+**一句话**：把 "数据分析师 → 模型上线" 的路径从 **几周** 缩短到 **几分钟**。
+
+---
+
+## 🏗 架构
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    用户交互层                              │
+│  ┌──────────────────┐  ┌──────────────────────────────┐  │
+│  │  🖥 mlp CLI       │  │  🐍 Python SDK                │  │
+│  │  typer + rich    │  │  from ml_platform import …   │  │
+│  └────────┬─────────┘  └────────────┬─────────────────┘  │
+│           │        HTTP REST        │                     │
+│           └───────────┬────────────┘                     │
+├───────────────────────┼─────────────────────────────────┤
+│               🚀 REST API (FastAPI :8000)                │
+│  ┌─────────┬─────────┬──────────┬──────────┬──────────┐ │
+│  │ /data   │ /exp    │ /models  │ /deploy  │ /monitor │ │
+│  └────┬────┴────┬────┴────┬─────┴────┬─────┴────┬─────┘ │
+├───────┼─────────┼─────────┼──────────┼──────────┼───────┤
+│       │   ┌─────┴─────┐   │   ┌──────┴──────┐   │        │
+│       │   │ PostgreSQL│   │   │   MLflow    │   │        │
+│       │   │  / SQLite │   │   │  (追踪实验)  │   │        │
+│       │   └───────────┘   │   └─────────────┘   │        │
+│       │                   │                     │        │
+│  ┌────┴────────┐   ┌──────┴──────┐   ┌─────────┴────┐   │
+│  │ 训练队列     │   │ 本地模型注册 │   │  推理日志     │   │
+│  │ FIFO Worker │   │  (内存推理)  │   │  (ClickHouse) │   │
+│  └─────────────┘   └─────────────┘   └──────────────┘   │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🚀 快速开始
 
 ```bash
-# 1. 安装后端
-uv sync
+# 1. 安装
+uv sync                         # 后端
+cd cli && uv sync && cd ..      # CLI
 
-# 2. 启动服务（本地开发，SQLite + MLflow 本地存储，无需 Docker）
-MLP_DATABASE_URL="sqlite+aiosqlite:///./mlp.db" \
-MLP_MLFLOW_TRACKING_URI="sqlite:///./mlflow.db" \
+# 2. 启动（默认 SQLite，零依赖启动）
 uv run uvicorn backend.main:app --reload
 
-# 3. 安装 CLI
-cd cli && uv sync && cd ..
+# 3. 登录
+mlp auth login --register -u alice -e alice@test.com -p secret123
 
-# 4. 登录
-./cli/.venv/bin/mlp auth login --register -u alice -e alice@test.com -p secret123
-
-# 5. 走通全流程
-./cli/.venv/bin/mlp data upload iris.csv                    # 上传数据
-./cli/.venv/bin/mlp experiments create -n demo -d <id> -t species --type classification
-./cli/.venv/bin/mlp experiments run-sklearn <exp-id>         # 训练
-./cli/.venv/bin/mlp experiments metrics <exp-id>             # 查看指标
+# 4. 走通全流程
+mlp data upload iris.csv
+mlp experiments create -n demo -d <id> -t species --type classification
+mlp experiments run-sklearn <exp-id>
+mlp experiments metrics <exp-id>
 ```
 
-服务启动后访问 `http://localhost:8000/docs` 查看交互式 API 文档。
+服务启动后访问 **http://localhost:8000/docs** 查看交互式 Swagger 文档。
+
+| 启动方式 | 命令 |
+|---------|------|
+| 默认 (SQLite) | `uv run uvicorn backend.main:app --reload` |
+| 指定 PostgreSQL | `MLP_DATABASE_URL=postgresql+asyncpg://...` |
+| 指定 MLflow Server | `MLP_MLFLOW_TRACKING_URI=http://mlflow:5000` |
 
 ---
 
-## CLI 命令参考
-
-`mlp` 是 ML Platform 的命令行工具，基于 typer + rich，支持彩色表格、实时监控面板、自动 token 管理。
+## 🖥 CLI 命令参考
 
 ### 安装
+
 ```bash
 cd cli && uv sync
 ./cli/.venv/bin/mlp --help
+
+# 或通过 wheel 安装（从 Release 下载后）
+uv tool install --from ml_platform_cli-*.whl --with ml_platform-*.whl ml-platform-cli
 ```
 
-### 命令总览
+### 命令树
 
 ```
 mlp
-├── auth login/logout/whoami     ← 认证管理（token 自动保存到 ~/.mlp/）
-├── data upload/list/get/        ← 数据：上传、列表、详情、画像、预览
-│        profile/preview/delete
-├── experiments list/get/create/ ← 实验：CRUD、sklearn 训练、指标、对比
-│        run/run-sklearn/metrics/
-│        compare/delete/enqueue
-├── queue status/watch           ← 训练队列：查看 / 实时刷新
-├── models list/get/register/    ← 模型：注册、晋升、下载 pickle
-│        promote/delete/download
-├── deployments list/get/create/ ← 部署：上线、停止、在线预测
-│        stop/delete/predict
-├── monitor metrics/drift        ← 监控：请求指标、漂移检测
-├── status                       ← 系统总览（实体计数 + 最近实验 + 运行中部署）
-└── health                       ← 快速健康检查
+├── 🔐 auth        login / logout / whoami / register
+├── 📂 data        upload / list / get / profile / preview / delete
+├── 🧪 experiments  list / get / create / run / run-sklearn /
+│                   metrics / compare / delete / enqueue
+├── 📋 queue        status / watch
+├── 🤖 models       list / get / register / promote / delete / download
+├── 🚀 deployments  list / get / create / stop / delete / predict
+├── 📊 monitor      metrics / drift
+├── ⚙️  config       show / --server <url>
+├── 📈 status       系统总览
+└── 💚 health       健康检查
 ```
 
 ### 常用示例
@@ -83,36 +127,31 @@ mlp
 # ── 认证 ──
 mlp auth login --register -u alice -e alice@test.com -p secret123
 mlp auth whoami
-mlp auth logout
+mlp config                           # 查看当前配置
+mlp config --server http://prod:8000 # 切换后端
 
 # ── 数据 ──
-mlp data upload data.csv
+mlp data upload iris.csv
 mlp data list
-mlp data profile <dataset-id>      # 数值列: mean/std/min/max/histogram
-mlp data preview <dataset-id> -n 20
+mlp data profile <id>                # 数值列: mean/std/min/max, 文本列: top 20
 
 # ── 实验 ──
-mlp experiments list
 mlp experiments create -n my-exp -d <dataset-id> -t target --type classification
 mlp experiments run-sklearn <exp-id>
-mlp experiments metrics <exp-id>    # rich 表格展示 accuracy/mse/r2
-mlp experiments compare <id1> <id2> <id3>
+mlp experiments metrics <exp-id>      # rich 表格展示 accuracy / mse / r2
 
 # ── 训练队列 ──
-mlp experiments enqueue <exp-id>    # 加入 FIFO 队列
-mlp queue status                    # 当前队列状态
-mlp queue watch                     # 实时刷新面板 (Ctrl+C 退出)
+mlp experiments enqueue <exp-id>      # 加入 FIFO 队列
+mlp queue status                      # 当前队列状态
+mlp queue watch                       # 实时刷新面板 (Ctrl+C 退出)
 
 # ── 模型 ──
-mlp models list
 mlp models register -n my-model -e <exp-id>
-mlp models promote <model-id>
 mlp models download <model-id> -o model.pkl
 
 # ── 部署 ──
 mlp deployments create -m <model-id>
-mlp deployments list
-mlp deployments predict <dep-id> -d '{"f1":5.1,"f2":3.5,"f3":1.4,"f4":0.2}'
+mlp deployments predict <dep-id> -d '{"f1":5.1,"f2":3.5}'
 mlp deployments stop <dep-id>
 
 # ── 监控 ──
@@ -120,638 +159,26 @@ mlp monitor metrics <dep-id> --range 24h
 mlp monitor drift <dep-id>
 
 # ── 系统 ──
-mlp status    # → Datasets: 3  Experiments: 5  Models: 2  Deployments: 1 (1 running)
+mlp status
 mlp health
 ```
 
-### Token 管理
-
-登录成功后 token 自动保存到 `~/.mlp/config.json`，后续所有需鉴权的命令自动携带。
-
-```json
-{
-  "token": "eyJ...",
-  "server": "http://localhost:8000",
-  "user": {"username": "alice", "email": "alice@test.com", "role": "user"}
-}
-```
-
-### 依赖
-
-| 工具 | 用途 |
-|------|------|
-| [typer](https://typer.tiangolo.com/) | CLI 框架 |
-| [rich](https://rich.readthedocs.io/) | 彩色表格、面板 |
-| `ml-platform` (SDK) | API 封装（本地 path 依赖） |
-
----
-
-## API 参考
-
-所有接口前缀 `/api`，均返回 JSON。分页使用 `offset`/`limit` 参数（默认 `0`/`20`）。
-
-### 1. 数据管理 `/api/data`
-
-#### `GET /` — 列表
-```
-GET /api/data/?offset=0&limit=20
-```
-**响应**: 数组
-```json
-[{
-  "id": "uuid",
-  "name": "iris.csv",
-  "description": null,
-  "file_path": "/tmp/ml-platform/uploads/xxx_iris.csv",
-  "file_type": "csv",
-  "row_count": 150,
-  "column_count": 5,
-  "size_bytes": 4550,
-  "version": 1,
-  "created_at": "2026-06-22T14:00:00",
-  "updated_at": "2026-06-22T14:00:00"
-}]
-```
-
-#### `POST /upload` — 上传 CSV
-```
-Content-Type: multipart/form-data
-file: <CSV 文件>
-```
-**响应**: 单个 Dataset 对象（同上），含自动生成的 `profile`（JSON 字符串）。
-
-#### `GET /{dataset_id}` — 详情
-**响应**: Dataset 对象。404 → `{"detail": "Dataset not found"}`
-
-#### `GET /{dataset_id}/profile` — 数据画像
-**响应**:
-```json
-{
-  "columns": [{
-    "name": "sepal_length",
-    "dtype": "float64",
-    "null_count": 0,
-    "null_ratio": 0.0,
-    "unique_count": 35,
-    "mean": 5.84,
-    "std": 0.83,
-    "min": 4.3,
-    "max": 7.9,
-    "histogram": [{"bin": "4.3-4.7", "count": 5}, ...]
-  }, {
-    "name": "species",
-    "dtype": "object",
-    "null_count": 0,
-    "null_ratio": 0.0,
-    "unique_count": 3,
-    "top_values": [{"value": "setosa", "count": 50}, ...]
-  }]
-}
-```
-
-> **前端注意**: 数值列 (`int`/`float`) 返回 `mean|std|min|max|histogram`；文本列返回 `top_values`（前 20 个）。
-
----
-
-### 2. 实验训练 `/api/experiments`
-
-#### `GET /` — 列表
-```
-GET /api/experiments/?offset=0&limit=20
-```
-**响应**:
-```json
-[{
-  "id": "uuid",
-  "name": "iris-classifier",
-  "dataset_id": "uuid",
-  "mlflow_run_id": "abc123",
-  "description": "鸢尾花分类",
-  "target_column": "species",
-  "problem_type": "classification",
-  "metrics": null,
-  "params": null,
-  "status": "pending",
-  "created_at": "...",
-  "updated_at": "..."
-}]
-```
-
-**`status` 取值**: `pending` | `running` | `completed` | `failed`
-
-**`problem_type` 取值**: `classification` | `regression`
-
-#### `POST /` — 创建实验
-```json
-{
-  "name": "iris-classifier",           // 必填，不填自动生成
-  "dataset_id": "uuid",                // 必填
-  "target_column": "species",          // 必填，目标列名
-  "problem_type": "classification",    // classification | regression
-  "description": "可选的实验描述"       // 可选
-}
-```
-**响应**: 创建的 Experiment 对象。
-
-#### `GET /{experiment_id}` — 详情
-**响应**: 单个 Experiment 对象。404 → `{"detail": "Experiment not found"}`
-
-#### `POST /{experiment_id}/run` — 执行训练（轻量）
-创建一个 MLflow run，仅记录参数 + accuracy=0.0（不做实际训练），状态变更为 `completed`。
-**响应**:
-```json
-{
-  "experiment_id": "uuid",
-  "mlflow_run_id": "abc123",
-  "status": "completed"
-}
-```
-
-#### `POST /{experiment_id}/run-sklearn` — 执行训练（真实 sklearn）
-加载数据集 CSV → LabelEncoder 编码 → 80/20 切分 → RandomForest 训练 → MLflow 记录指标和模型。
-
-**响应**:
-```json
-{
-  "experiment_id": "uuid",
-  "mlflow_run_id": "abc123",
-  "status": "completed"
-}
-```
-
-> **注意**: 这个接口会实实在在地跑 sklearn 训练，耗时取决于数据集大小。训练后模型自动存入 MLflow 本地存储，可用于后续部署。
-
-#### `GET /{experiment_id}/mlflow-metrics` — 查看训练结果
-**响应**:
-```json
-{
-  "metrics": [
-    {"key": "accuracy", "value": 0.9667},
-    {"key": "mse", "value": 0.12},
-    {"key": "r2", "value": 0.85}
-  ],
-  "params": [
-    {"key": "problem_type", "value": "classification"},
-    {"key": "target_column", "value": "species"},
-    {"key": "rows", "value": "150"}
-  ]
-}
-```
-
-> **分类**返回 `accuracy`；**回归**返回 `mse` + `r2`。
-
----
-
-### 3. 模型管理 `/api/models`
-
-#### `GET /` — 列表
-```
-GET /api/models/?offset=0&limit=20
-```
-**响应**:
-```json
-[{
-  "id": "uuid",
-  "name": "iris-v1",
-  "version": 1,
-  "experiment_id": "uuid",
-  "mlflow_model_uri": "abc123",
-  "framework": "sklearn",
-  "metrics": null,
-  "artifact_path": null,
-  "status": "registered",
-  "created_at": "...",
-  "updated_at": "..."
-}]
-```
-
-**`status` 取值**: `registered`
-
-#### `GET /{model_id}` — 详情
-**响应**: 单个 ModelVersion 对象。
-
-#### `POST /register` — 注册模型（从实验）
-```json
-{
-  "name": "iris-v1",
-  "experiment_id": "uuid"
-}
-```
-**响应**: 创建的 ModelVersion 对象（version=1, framework="sklearn"）。
-
-#### `POST /{model_id}/promote` — 版本晋升
-复制当前模型记录，`version + 1`，返回新版本对象。
-```json
-// 响应 (新版本)
-{ "id": "uuid", "name": "iris-v1", "version": 2, "status": "registered" }
-```
-
----
-
-### 4. 在线推理 `/api/deployments`
-
-#### `GET /` — 列表
-```
-GET /api/deployments/?offset=0&limit=20
-```
-**响应**:
-```json
-[{
-  "id": "uuid",
-  "model_version_id": "uuid",
-  "name": "deploy-iris-v1-v1",
-  "status": "running",
-  "ray_serve_app": "deploy-iris-v1-v1",
-  "endpoint_url": "http://localhost:8000/api/deployments/uuid/predict",
-  "replicas": 1,
-  "traffic_percent": 100,
-  "created_at": "...",
-  "updated_at": "..."
-}]
-```
-
-**`status` 取值**: `deploying` | `running` | `stopped` | `failed`
-
-#### `POST /` — 部署模型
-```json
-{
-  "model_version_id": "uuid",
-  "replicas": 1              // 可选，默认 1
-}
-```
-模型从 MLflow 加载到内存（本地推理），不依赖外部服务。
-
-**响应**:
-```json
-{
-  "id": "uuid",
-  "name": "deploy-iris-v1-v1",
-  "model_version_id": "uuid",
-  "status": "running",
-  "endpoint_url": "http://localhost:8000/api/deployments/uuid/predict",
-  "replicas": 1
-}
-```
-
-#### `GET /{deployment_id}` — 详情
-**响应**: 单个 Deployment 对象。
-
-#### `POST /{deployment_id}/stop` — 停止部署
-从内存卸载模型，`status` 变为 `stopped`。
-**响应**:
-```json
-{ "id": "uuid", "status": "stopped" }
-```
-
-#### `POST /{deployment_id}/predict` — 推理
-**请求**:
-```json
-{
-  "sepal_length": 5.1,
-  "sepal_width": 3.5,
-  "petal_length": 1.4,
-  "petal_width": 0.2
-}
-```
-
-**成功响应**:
-```json
-{ "prediction": ["setosa"] }
-```
-
-**失败响应**:
-```json
-{ "error": "Deployment is not running" }
-// 或
-{ "error": "具体错误信息" }
-```
-
-> **前端注意**: 推理请求的特征键名必须与训练时的列名一致（区分大小写），否则会返回特征不匹配错误。
-
----
-
-### 5. 监控告警 `/api/monitoring`
-
-#### `GET /{deployment_id}/metrics` — 部署指标
-```
-GET /api/monitoring/{deployment_id}/metrics?time_range=1h
-```
-
-**`time_range` 取值**: `5m` | `15m` | `1h` | `6h` | `24h` | `7d`
-
-**响应**:
-```json
-{
-  "deployment_id": "uuid",
-  "time_range": "1h",
-  "metrics": {
-    "request_count": 42,
-    "avg_latency_ms": 12.5,
-    "p95_latency_ms": 25.0,
-    "error_rate": 0.0238,
-    "throughput_rps": 0.01
-  }
-}
-```
-
-#### `GET /{deployment_id}/drift` — 数据漂移检测
-```
-GET /api/monitoring/{deployment_id}/drift
-```
-
-> 基于最近 200 条推理日志，对数值特征做 z-score 检测（阈值 2.0）。需要 ≥50 条日志才能检测。
-
-**响应**:
-```json
-{
-  "deployment_id": "uuid",
-  "drift_detected": true,
-  "drift_score": 2.56,
-  "feature_drifts": [
-    {"feature": "sepal_length", "z_score": 2.56, "drifted": true}
-  ]
-}
-// 数据不足时:
-{
-  "deployment_id": "uuid",
-  "drift_detected": false,
-  "drift_score": 0.0,
-  "feature_drifts": [],
-  "message": "Not enough data for drift detection (need 50+ samples)"
-}
-```
-
----
-
-### 6. 用户认证 `/api/auth`
-
-所有密码使用 bcrypt 哈希存储，Token 使用 JWT (HS256) 签发，默认有效期 1440 分钟（24 小时）。需要在 `Authorization` 头中携带 `Bearer <token>`。
-
-#### `POST /register` — 注册
-```json
-{
-  "username": "alice",       // 必填，全局唯一
-  "email": "alice@test.com", // 必填，全局唯一
-  "password": "secret123"    // 必填，至少 6 位
-}
-```
-**成功响应** (200):
-```json
-{
-  "id": "uuid",
-  "username": "alice",
-  "email": "alice@test.com",
-  "role": "user",
-  "access_token": "eyJ...",
-  "token_type": "bearer"
-}
-```
-> 注册成功即返回 token，无需再登录。
-
-**错误响应**:
-- 409 — `{"detail": "Email already registered"}`
-- 409 — `{"detail": "Username already taken"}`
-- 422 — `{"detail": "Password must be at least 6 characters"}`
-
-#### `POST /login` — 登录
-```json
-{
-  "email": "alice@test.com",
-  "password": "secret123"
-}
-```
-**成功响应** (200): 同注册返回（id, username, email, role, access_token, token_type）
-
-**错误响应**:
-- 401 — `{"detail": "Invalid email or password"}`
-
-#### `GET /me` — 当前用户
-```
-Authorization: Bearer <token>
-```
-**成功响应** (200):
-```json
-{
-  "id": "uuid",
-  "username": "alice",
-  "email": "alice@test.com",
-  "role": "user",
-  "created_at": "2026-06-22T14:00:00"
-}
-```
-**错误响应**: 401 — Token 无效或过期
-
-#### `GET /users` — 用户列表（需认证）
-```
-GET /api/auth/users?offset=0&limit=50
-Authorization: Bearer <token>
-```
-**响应**: 数组，元素同 `/me` 格式。
-
----
-
-### 7. 训练任务队列
-
-当有多个模型训练任务需要执行时，可通过队列接口排队执行。队列采用 **FIFO**（先进先出）策略，后台 worker 逐个处理，一次只运行一个任务。
-
-队列集成在 `/api/experiments` 路由下：
-
-#### `POST /api/experiments/{id}/enqueue` — 加入队列
-将已创建的实验加入训练队列。无需请求体。
-
-**成功响应** (200):
-```json
-{
-  "experiment_id": "uuid",
-  "position": 1,
-  "status": "queued"
-}
-```
-**错误响应**: 404 — 实验不存在
-
-#### `GET /api/experiments/queue/status` — 查看队列
-```
-GET /api/experiments/queue/status
-```
-**响应**:
-```json
-{
-  "total": 5,
-  "pending": 2,
-  "running": {
-    "experiment_id": "uuid",
-    "experiment_name": "iris-classifier",
-    "position": 1,
-    "status": "running",
-    "added_at": "2026-06-22T14:00:00",
-    "error": null
-  },
-  "completed": 2,
-  "failed": 1,
-  "jobs": [
-    {"experiment_id": "uuid", "experiment_name": "iris-classifier", "position": 1, "status": "running", "added_at": "...", "error": null},
-    {"experiment_id": "uuid", "experiment_name": "regression-test", "position": 2, "status": "queued", "added_at": "...", "error": null},
-    {"experiment_id": "uuid", "experiment_name": "batch-1", "position": 3, "status": "completed", "added_at": "...", "error": null},
-    {"experiment_id": "uuid", "experiment_name": "batch-2", "position": 4, "status": "failed", "added_at": "...", "error": "..."},
-    {"experiment_id": "uuid", "experiment_name": "batch-3", "position": 5, "status": "completed", "added_at": "...", "error": null}
-  ]
-}
-```
-
-**字段说明**:
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| total | int | 累计任务总数 |
-| pending | int | 等待中的数量 |
-| running | object\|null | 当前正在运行的任务（无则为 null） |
-| completed | int | 已完成数量 |
-| failed | int | 失败数量 |
-| jobs | array | 全部任务列表（按入队顺序） |
-
-**`status` 流转**:
-```
-queued → running → completed
-              ↘ failed
-```
-
-> **注意**: worker 是应用进程内的后台 asyncio 任务，服务器重启后队列会丢失。
-
----
-
-### 8. 系统状态 `/api/system`
-
-#### `GET /status` — 全局概览
-```
-GET /api/system/status
-```
-**响应**:
-```json
-{
-  "server": "ok",
-  "counts": {
-    "datasets": 12,
-    "experiments": 8,
-    "models": 5,
-    "deployments": 3,
-    "running_deployments": 2
-  },
-  "recent_experiments": [
-    {"id": "uuid", "name": "iris-v2", "status": "completed", "created_at": "..."}
-  ],
-  "running_deployments_list": [
-    {"id": "uuid", "name": "dep-iris-v1", "endpoint_url": "http://..."}
-  ]
-}
-```
-
----
-
-### 9. 健康检查
-
-#### `GET /api/health`
-```json
-{ "status": "ok" }
-```
-
----
-
-## 完整流程示例
-
-### 基础流程：数据 → 训练 → 部署 → 预测
+### 配置后端 URL
 
 ```bash
-# 1. 上传数据
-curl -F "file=@iris.csv" http://localhost:8000/api/data/upload
-# → {"id": "ds-xxx", "name": "iris.csv", "row_count": 150, ...}
+# 方式 1: 环境变量（优先级最高）
+MLP_SERVER=http://192.168.1.100:8000 mlp status
 
-# 2. 创建实验
-curl -X POST http://localhost:8000/api/experiments/ \
-  -H "Content-Type: application/json" \
-  -d '{"name":"my-exp","dataset_id":"ds-xxx","target_column":"species","problem_type":"classification"}'
-# → {"id": "exp-xxx", "status": "pending", ...}
+# 方式 2: mlp config 命令（持久化）
+mlp config --server http://192.168.1.100:8000
 
-# 3. 训练
-curl -X POST http://localhost:8000/api/experiments/exp-xxx/run-sklearn
-# → {"status": "completed", "mlflow_run_id": "abc123"}
-
-# 4. 查看指标
-curl http://localhost:8000/api/experiments/exp-xxx/mlflow-metrics
-# → {"metrics": [{"key":"accuracy","value":0.97}], "params": [...]}
-
-# 5. 注册模型
-curl -X POST http://localhost:8000/api/models/register \
-  -H "Content-Type: application/json" \
-  -d '{"name":"my-model","experiment_id":"exp-xxx"}'
-# → {"id": "model-xxx", "name": "my-model", "version": 1, ...}
-
-# 6. 部署
-curl -X POST http://localhost:8000/api/deployments/ \
-  -H "Content-Type: application/json" \
-  -d '{"model_version_id":"model-xxx","replicas":1}'
-# → {"id": "dep-xxx", "status": "running", ...}
-
-# 7. 预测
-curl -X POST http://localhost:8000/api/deployments/dep-xxx/predict \
-  -H "Content-Type: application/json" \
-  -d '{"sepal_length":5.1,"sepal_width":3.5,"petal_length":1.4,"petal_width":0.2}'
-# → {"prediction": ["setosa"]}
-
-# 8. 查看监控
-curl http://localhost:8000/api/monitoring/dep-xxx/metrics?time_range=24h
-# → {"metrics": {"request_count": 1, "avg_latency_ms": 5.2, ...}}
-
-# 9. 停止部署
-curl -X POST http://localhost:8000/api/deployments/dep-xxx/stop
-# → {"id": "dep-xxx", "status": "stopped"}
-```
-
-### 用户认证流程
-
-```bash
-# 注册
-curl -X POST http://localhost:8000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"alice","email":"alice@test.com","password":"secret123"}'
-# → {"id": "user-xxx", "username": "alice", "access_token": "eyJ...", ...}
-
-# 登录
-curl -X POST http://localhost:8000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@test.com","password":"secret123"}'
-# → {"id": "user-xxx", "username": "alice", "access_token": "eyJ...", ...}
-
-# 查看当前用户
-curl http://localhost:8000/api/auth/me \
-  -H "Authorization: Bearer eyJ..."
-# → {"id": "user-xxx", "username": "alice", "email": "alice@test.com", "role": "user", ...}
-```
-
-### 批量训练队列流程
-
-```bash
-# 创建 3 个实验并加入队列
-for name in batch-1 batch-2 batch-3; do
-  # 创建实验 (假设已有 dataset_id)
-  EXP_ID=$(curl -s -X POST http://localhost:8000/api/experiments/ \
-    -H "Content-Type: application/json" \
-    -d "{\"name\":\"$name\",\"dataset_id\":\"ds-xxx\",\"target_column\":\"target\",\"problem_type\":\"classification\"}" \
-    | jq -r '.id')
-  # 加入队列
-  curl -X POST "http://localhost:8000/api/experiments/$EXP_ID/enqueue"
-done
-
-# 查看队列状态
-curl http://localhost:8000/api/experiments/queue/status | jq .
-# → {"total":3, "pending":2, "running":{...}, "completed":0, "failed":0, "jobs":[...]}
-
-# 等待全部完成（轮询直到 pending==0）
-curl http://localhost:8000/api/experiments/queue/status | jq '.pending'
+# 方式 3: 登录时指定
+mlp auth login -e alice@test.com -p xxx --server http://prod:8000
 ```
 
 ---
 
-## Python SDK
+## 🐍 Python SDK
 
 ```python
 import asyncio
@@ -759,12 +186,11 @@ from ml_platform import Client
 
 async def main():
     async with Client("http://localhost:8000") as client:
-        # 注册 & 登录
+        # 注册
         user = await client.auth.register("alice", "alice@test.com", "secret123")
-        # 后续请求自动携带 token
         client.set_token(user["access_token"])
 
-        # 上传 → 训练 → 注册 → 部署 → 预测
+        # 上传 → 训练 → 部署 → 预测
         ds = await client.data.upload("iris.csv")
         exp = await client.experiments.create(
             name="demo", dataset_id=ds["id"],
@@ -778,236 +204,210 @@ async def main():
         })
         print(pred)  # {"prediction": ["setosa"]}
 
-        # 系统状态
-        status = await client.system.status()
-        print(status)
-
 asyncio.run(main())
 ```
 
 ---
 
-## 数据模型速查
+## 🎥 完整流程演示
+
+参见 **[DEMO.md](./DEMO.md)** — 从零开始走通全流程：注册 → 上传 Iris / Diabetes / Auto MPG → 训练 → 指标 → 队列 → 模型部署 → 在线预测。
+
+---
+
+## 📖 API 参考
+
+所有接口前缀 `/api`，均返回 JSON。分页使用 `offset`/`limit`（默认 `0`/`20`）。
+
+> 写操作 (`POST`/`DELETE`) 需要 `Authorization: Bearer <token>`。
+
+### 1. 📂 数据管理 `/api/data`
+
+| 端点 | 说明 |
+|------|------|
+| `GET /` | 列表 (`?offset=0&limit=20`) |
+| `POST /upload` | 上传 CSV（multipart） |
+| `GET /{id}` | 详情 |
+| `GET /{id}/profile` | 数据画像（数值列 mean/std/min/max/histogram，文本列 top_values） |
+| `GET /{id}/preview?rows=10` | 前 N 行预览 |
+| `DELETE /{id}` | 删除 |
+
+### 2. 🧪 实验训练 `/api/experiments`
+
+| 端点 | 说明 |
+|------|------|
+| `GET /` | 列表 |
+| `POST /` | 创建 `{name, dataset_id, target_column, problem_type}` |
+| `GET /{id}` | 详情 |
+| `POST /{id}/run` | 轻量执行（仅记录参数） |
+| `POST /{id}/run-sklearn` | **sklearn 真实训练**（RandomForest + MLflow） |
+| `GET /{id}/mlflow-metrics` | 训练指标（accuracy / mse / r2） |
+| `DELETE /{id}` | 删除 |
+| `GET /compare?ids=...` | 多实验对比 |
+| `POST /{id}/enqueue` | ⭐ 加入训练队列 |
+| `GET /queue/status` | ⭐ 队列状态 |
+
+**`status` 流转**: `pending → running → completed`（`failed`）
+
+### 3. 🤖 模型管理 `/api/models`
+
+| 端点 | 说明 |
+|------|------|
+| `GET /` | 列表 |
+| `GET /{id}` | 详情 |
+| `POST /register` | 注册 `{name, experiment_id}` |
+| `POST /{id}/promote` | 版本晋升 (version +1) |
+| `DELETE /{id}` | 删除 |
+| `GET /{id}/download` | ⭐ 下载 pickle 模型文件 |
+
+### 4. 🚀 部署推理 `/api/deployments`
+
+| 端点 | 说明 |
+|------|------|
+| `GET /` | 列表 |
+| `POST /` | 部署 `{model_version_id, replicas}` |
+| `GET /{id}` | 详情 |
+| `POST /{id}/stop` | 停止 |
+| `DELETE /{id}` | 删除 |
+| `POST /{id}/predict` | 🔮 **在线预测** `{feature: value, ...}` |
+
+### 5. 📊 监控 `/api/monitoring`
+
+| 端点 | 说明 |
+|------|------|
+| `GET /{id}/metrics?time_range=1h` | 请求量/延迟/错误率/吞吐 |
+| `GET /{id}/drift` | z-score 漂移检测（阈值 2.0） |
+
+### 6. 🔐 认证 `/api/auth`
+
+| 端点 | 说明 |
+|------|------|
+| `POST /register` | 注册 `{username, email, password}` → token |
+| `POST /login` | 登录 `{email, password}` → token |
+| `GET /me` | 当前用户（需 Bearer token） |
+| `GET /users` | 用户列表（需认证） |
+
+### 7. ⚙️ 系统 `/api/system` + 健康检查
+
+| 端点 | 说明 |
+|------|------|
+| `GET /api/system/status` | 实体计数 + 最近实验 + 运行中部署 |
+| `GET /api/health` | `{"status": "ok"}` |
+
+---
+
+## 🗄 数据模型速查
 
 ### User
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | UUID | 主键 |
-| username | str | 用户名（唯一） |
-| email | str | 邮箱（唯一，用于登录） |
-| hashed_password | str | bcrypt 哈希密码 |
-| role | str | user（默认） |
-| created_at | datetime | |
-| updated_at | datetime | |
-
-### Dataset
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | UUID | 主键 |
-| name | str | 文件名 |
-| file_path | str | 服务器存储路径 |
-| file_type | str | 扩展名 (csv) |
-| row_count | int\|null | 行数 |
-| column_count | int\|null | 列数 |
-| size_bytes | int\|null | 文件大小 |
-| profile | JSON str\|null | 画像 |
-| version | int | 版本号 |
-| created_at | datetime | |
-| updated_at | datetime | |
+| id | UUID | PK |
+| username | str | 唯一 |
+| email | str | 唯一，登录凭据 |
+| hashed_password | str | bcrypt |
+| role | str | `user` |
 
 ### Experiment
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | UUID | |
+| id | UUID | PK |
 | name | str | 实验名称 |
-| dataset_id | UUID\|null | 关联数据集 |
-| mlflow_run_id | str\|null | MLflow Run ID |
-| description | str\|null | 描述 |
+| dataset_id | UUID | FK → datasets |
 | target_column | str | 目标列 |
-| problem_type | str | classification\|regression |
-| metrics | JSON str\|null | 指标 |
-| params | JSON str\|null | 超参数 |
-| status | str | pending\|running\|completed\|failed |
+| problem_type | str | `classification` / `regression` |
+| mlflow_run_id | str? | MLflow Run ID |
+| metrics | JSON? | 指标 |
+| status | str | `pending`/`running`/`completed`/`failed` |
 
 ### ModelVersion
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | UUID | |
+| id | UUID | PK |
 | name | str | 模型名 |
 | version | int | 版本号 |
-| experiment_id | UUID\|null | 来源实验 |
-| mlflow_model_uri | str\|null | MLflow Run ID |
-| framework | str\|null | sklearn |
-| status | str | registered |
+| experiment_id | UUID? | 来源实验 |
+| framework | str? | `sklearn` |
 
 ### Deployment
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | UUID | |
-| model_version_id | UUID | 关联模型版本 |
+| id | UUID | PK |
+| model_version_id | UUID | FK |
 | name | str | 部署名 |
-| status | str | deploying\|running\|stopped\|failed |
-| endpoint_url | str\|null | 推理 URL |
-| replicas | int | 副本数 |
-
-### Deployment 状态机
-```
-deploying ──→ running ──→ stopped
-```
+| status | str | `deploying`/`running`/`stopped`/`failed` |
+| endpoint_url | str? | 推理 URL |
 
 ---
 
-## 环境变量
+## 🔧 环境变量
 
-全部 `MLP_` 前缀，定义在 `backend/core/config.py`：
+全部 `MLP_` 前缀：
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `MLP_DATABASE_URL` | `postgresql+asyncpg://mlp:mlp@localhost:5432/mlp` | 也支持 sqlite+aiosqlite |
-| `MLP_MLFLOW_TRACKING_URI` | `http://localhost:5000` | 也支持 sqlite:///path/to/mlflow.db |
-| `MLP_MINIO_ENDPOINT` | `localhost:9000` | |
+| `MLP_DATABASE_URL` | `sqlite+aiosqlite:///./mlp.db` | PostgreSQL: `postgresql+asyncpg://...` |
+| `MLP_MLFLOW_TRACKING_URI` | `sqlite:///./mlflow.db` | MLflow Server: `http://localhost:5000` |
+| `MLP_MINIO_ENDPOINT` | `localhost:9000` | S3 对象存储 |
 | `MLP_MINIO_ACCESS_KEY` | `minioadmin` | |
 | `MLP_MINIO_SECRET_KEY` | `minioadmin` | |
 | `MLP_MINIO_BUCKET` | `ml-platform` | |
-| `MLP_TEMPORAL_HOST` | `localhost:7233` | |
-| `MLP_CLICKHOUSE_URL` | `http://localhost:8123` | |
-| `MLP_RAY_ADDRESS` | `auto` | |
-| `MLP_DEBUG` | `false` | 开启 SQL echo |
+| `MLP_TEMPORAL_HOST` | `localhost:7233` | 工作流引擎 |
+| `MLP_CLICKHOUSE_URL` | `http://localhost:8123` | 指标存储 |
+| `MLP_JWT_SECRET` | `change-me-...` | ⚠️ 生产必须改 |
+| `MLP_DEBUG` | `false` | SQL echo |
+| `MLP_SERVER` | `http://localhost:8000` | CLI 专用：目标 API 地址 |
 
 ---
 
-## 项目结构
+## 📁 项目结构
 
 ```
 ├── backend/
-│   ├── main.py              # FastAPI 入口，路由注册 + lifespan
-│   ├── api/                 # 路由层
-│   │   ├── data.py                  # 数据管理
-│   │   ├── experiments.py           # 实验训练 + 队列
-│   │   ├── models.py                # 模型管理
-│   │   ├── deployments.py           # 在线推理
-│   │   ├── monitoring.py            # 监控告警
-│   │   ├── auth.py                  # 用户认证
-│   │   └── system.py                # 系统状态
-│   ├── services/            # 业务逻辑层
-│   │   ├── data_service.py          # 数据上传 + pandas 画像
-│   │   ├── training_service.py      # 实验 CRUD + sklearn 训练
-│   │   ├── model_service.py         # 模型注册 + 版本晋升
-│   │   ├── deployment_service.py    # 部署生命周期
-│   │   ├── monitoring_service.py    # 指标聚合 + 漂移检测
-│   │   ├── local_serving.py         # 本地内存模型推理
-│   │   ├── training_queue.py        # FIFO 训练任务队列
-│   │   └── ray_serve_manager.py     # Ray Serve 备选方案
-│   ├── models_db/           # SQLAlchemy ORM (Dataset, Experiment, ModelVersion, Deployment, InferenceLog, User)
-│   ├── core/                # 配置、依赖注入、认证、中间件
-│   ├── workflows/           # Temporal 工作流
-│   └── tests/               # 54 个测试 (含 auth + queue + multi-enqueue + e2e)
-├── sdk/ml_platform/         # Python SDK
-│   ├── client.py            # Client 类 (支持 token)
-│   ├── auth.py              # AuthAPI (register, login, me, list)
-│   └── ...                  # data, experiments, models, deployments, monitoring, system
-├── cli/ml_platform_cli/     # 命令行工具 (typer + rich)
-│   ├── main.py              # mlp 命令入口 (30+ 命令)
-│   └── config.py            # Token 持久化 (~/.mlp/config.json)
-├── infra/                   # Prometheus 配置
-├── demo_full_pipeline.py    # 全流程演示脚本
-├── docker-compose.yml       # 基础设施服务
+│   ├── main.py              # FastAPI 入口 + lifespan
+│   ├── api/                 # 路由层（7 模块）
+│   ├── services/            # 业务逻辑（8 服务）
+│   ├── models_db/           # SQLAlchemy ORM（6 模型）
+│   ├── core/                # 配置 / DI / 认证 / 中间件
+│   └── tests/               # 54 个测试
+├── sdk/ml_platform/         # Python SDK（8 模块）
+├── cli/ml_platform_cli/     # 🖥 命令行工具（30+ 命令）
+├── DEMO.md                  # 🎥 完整演示流程
+├── docker-compose.yml       # 生产基础设施
 └── pyproject.toml
 ```
 
 ---
 
-## 前端集成指南
+## 🧩 前端集成
 
-### CORS
-后端已配置 `allow_origins=["*"]`，开发环境无需额外处理。
-
-### 基础 URL
-默认 `http://localhost:8000`，通过环境变量 `NEXT_PUBLIC_API_URL` 配置。
-
-### 请求模式（以 React/TypeScript 为例）
+后端已配置 CORS `allow_origins=["*"]`。JWT token 存入 `localStorage`，请求时携带：
 
 ```typescript
-const API_BASE = "http://localhost:8000";
-
-// 通用 fetch 封装
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    ...options,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
+const token = localStorage.getItem("token");
+fetch(`${API_BASE}${path}`, {
+  headers: {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  },
+});
 ```
 
-### 页面建议
+### 建议页面
 
 | 路由 | 功能 | 核心 API |
 |------|------|---------|
-| `/login` | 登录 / 注册 | `POST /api/auth/login`, `/register` |
-| `/data` | 数据集上传 + 列表 + 画像 | `GET/POST /api/data` |
-| `/experiments` | 实验列表 + 创建 + 运行 + 指标 | `GET/POST /api/experiments` |
-| `/experiments/:id` | 实验详情 + MLflow 指标面板 | `GET /api/experiments/:id` |
-| `/queue` | 训练队列监控面板 | `GET /api/experiments/queue/status` |
-| `/models` | 模型注册 + 版本列表 | `GET/POST /api/models` |
-| `/deployments` | 部署列表 + 部署/停止 + 在线预测 | `GET/POST /api/deployments` |
-| `/monitoring` | 监控面板 + 漂移检测 | `GET /api/monitoring` |
-| `/status` | 系统状态总览 | `GET /api/system/status` |
+| `/login` | 登录/注册 | `POST /api/auth/login` |
+| `/data` | 数据集管理 | `GET/POST /api/data` |
+| `/experiments` | 实验列表+创建+训练 | `GET/POST /api/experiments` |
+| `/experiments/:id` | 指标面板 | `GET /api/experiments/:id` |
+| `/queue` | 训练队列监控 | `GET /api/experiments/queue/status` |
+| `/models` | 模型注册+版本 | `GET/POST /api/models` |
+| `/deployments` | 部署+在线预测 | `GET/POST /api/deployments` |
+| `/monitoring` | 监控面板 | `GET /api/monitoring` |
+| `/status` | 系统总览 | `GET /api/system/status` |
 
-### 认证集成
+---
 
-所有需要鉴权的接口在请求头中携带 JWT token：
-
-```typescript
-// 登录成功后存储 token
-const { access_token } = await apiFetch("/api/auth/login", {
-  method: "POST",
-  body: JSON.stringify({ email, password }),
-});
-localStorage.setItem("token", access_token);
-
-// 后续请求统一添加
-function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = localStorage.getItem("token");
-  return fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options?.headers,
-    },
-    ...options,
-  }).then(async (res) => {
-    if (!res.ok) {
-      if (res.status === 401 && window.location.pathname !== "/login") {
-        localStorage.removeItem("token");
-        window.location.href = "/login";
-      }
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail || `HTTP ${res.status}`);
-    }
-    return res.json();
-  });
-}
-```
-
-### 典型页面数据流
-
-**实验列表页**:
-```
-1. GET /api/experiments/ → 渲染表格
-2. POST /api/experiments/ → 创建新实验
-3. POST /api/experiments/:id/run-sklearn → 执行训练（可能需要 loading 状态）
-4. GET /api/experiments/:id/mlflow-metrics → 展示训练结果（轮询直到 completed）
-```
-
-**在线推理页**:
-```
-1. GET /api/deployments/ → 部署列表
-2. POST /api/deployments/ → 部署模型
-3. 输入特征 → POST /api/deployments/:id/predict → 展示预测结果
-4. GET /api/monitoring/:id/metrics → 展示请求量/延迟/错误率图表
-```
+<p align="center">
+  <sub>Built with ❤️ using FastAPI · SQLAlchemy · MLflow · sklearn · typer · rich</sub>
+</p>

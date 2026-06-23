@@ -39,8 +39,8 @@ def get_token() -> str | None:
 
 
 def get_server() -> str:
-    """Return the configured server URL or default."""
-    return load_config().get("server", "http://localhost:8000")
+    """Return the configured server URL. Checks env var MLP_SERVER first."""
+    return os.environ.get("MLP_SERVER") or load_config().get("server", "http://localhost:8000")
 
 
 def get_user_info() -> dict:

@@ -73,29 +73,17 @@ class DataService:
         return dataset
 
     async def get_profile(self, dataset_id: str) -> dict | None:
+        # Return the full profile JSON stored at upload time (includes top_values for strings)
         result = await self.db.execute(
-            select(DatasetColumn).where(DatasetColumn.dataset_id == dataset_id)
+            select(Dataset).where(Dataset.id == dataset_id)
         )
-        columns = result.scalars().all()
-        if not columns:
+        dataset = result.scalar_one_or_none()
+        if not dataset or not dataset.profile:
             return None
-        return {
-            "columns": [
-                {
-                    "name": c.name,
-                    "dtype": c.dtype,
-                    "null_count": c.null_count,
-                    "null_ratio": c.null_ratio,
-                    "unique_count": c.unique_count,
-                    "mean": c.mean,
-                    "std": c.std,
-                    "min": c.min_val,
-                    "max": c.max_val,
-                    "histogram": json.loads(c.histogram) if c.histogram else [],
-                }
-                for c in columns
-            ]
-        }
+        try:
+            return json.loads(dataset.profile)
+        except (json.JSONDecodeError, TypeError):
+            return None
 
     async def preview(self, dataset_id: str, rows: int = 10) -> dict:
         """Return first N rows of a dataset as JSON."""

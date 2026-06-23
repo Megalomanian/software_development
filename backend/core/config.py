@@ -6,8 +6,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     model_config = {"env_prefix": "MLP_", "extra": "ignore"}
 
-    # Database
-    database_url: str = "postgresql+asyncpg://mlp:mlp@localhost:5432/mlp"
+    # Database — defaults to SQLite for local dev; set MLP_DATABASE_URL for PostgreSQL
+    database_url: str = "sqlite+aiosqlite:///./mlp.db"
     clickhouse_url: str = "http://localhost:8123"
 
     # MinIO
@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     minio_secret_key: str = "minioadmin"
     minio_bucket: str = "ml-platform"
 
-    # MLflow
-    mlflow_tracking_uri: str = "http://localhost:5000"
+    # MLflow — defaults to local SQLite; set MLP_MLFLOW_TRACKING_URI for server
+    mlflow_tracking_uri: str = "sqlite:///./mlflow.db"
 
     # Temporal
     temporal_host: str = "localhost:7233"
