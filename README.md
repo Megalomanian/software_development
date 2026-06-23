@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/fastapi-0.115%2B-green" alt="FastAPI">
   <img src="https://img.shields.io/badge/sklearn-1.6%2B-orange" alt="sklearn">
   <img src="https://img.shields.io/badge/license-MIT-brightgreen" alt="License">
-  <img src="https://img.shields.io/badge/tests-54%20passed-success" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-60%20passed-success" alt="Tests">
 </p>
 
 <p align="center">
@@ -110,10 +110,10 @@ uv tool install --from ml_platform_cli-*.whl --with ml_platform-*.whl ml-platfor
 mlp
 ├── 🔐 auth        login / logout / whoami / register
 ├── 📂 data        upload / list / get / profile / preview / delete
-├── 🧪 experiments  list / get / create / run / run-sklearn /
+├── 🧪 experiments  list / ids / get / create / run / run-sklearn /
 │                   metrics / compare / delete / enqueue
 ├── 📋 queue        status / watch
-├── 🤖 models       list / get / register / promote / delete / download
+├── 🤖 models       list / ids / get / register / promote / delete / download
 ├── 🚀 deployments  list / get / create / stop / delete / predict
 ├── 📊 monitor      metrics / drift
 ├── ⚙️  config       show / --server <url>
@@ -136,6 +136,7 @@ mlp data list
 mlp data profile <id>                # 数值列: mean/std/min/max, 文本列: top 20
 
 # ── 实验 ──
+mlp experiments ids                    # 列出所有实验 ID（完整 UUID，无分页）
 mlp experiments create -n my-exp -d <dataset-id> -t target --type classification
 mlp experiments run-sklearn <exp-id>
 mlp experiments metrics <exp-id>      # rich 表格展示 accuracy / mse / r2
@@ -146,6 +147,7 @@ mlp queue status                      # 当前队列状态
 mlp queue watch                       # 实时刷新面板 (Ctrl+C 退出)
 
 # ── 模型 ──
+mlp models ids                        # 列出所有模型 ID（完整 UUID，无分页）
 mlp models register -n my-model -e <exp-id>
 mlp models download <model-id> -o model.pkl
 
@@ -237,6 +239,7 @@ asyncio.run(main())
 | 端点 | 说明 |
 |------|------|
 | `GET /` | 列表 |
+| `GET /ids` | 🆕 所有实验 ID+名称+状态（无分页，适合快速查找） |
 | `POST /` | 创建 `{name, dataset_id, target_column, problem_type}` |
 | `GET /{id}` | 详情 |
 | `POST /{id}/run` | 轻量执行（仅记录参数） |
@@ -254,6 +257,7 @@ asyncio.run(main())
 | 端点 | 说明 |
 |------|------|
 | `GET /` | 列表 |
+| `GET /ids` | 🆕 所有模型 ID+名称+版本+状态（无分页，适合快速查找） |
 | `GET /{id}` | 详情 |
 | `POST /register` | 注册 `{name, experiment_id}` |
 | `POST /{id}/promote` | 版本晋升 (version +1) |
@@ -368,7 +372,7 @@ asyncio.run(main())
 │   ├── services/            # 业务逻辑（8 服务）
 │   ├── models_db/           # SQLAlchemy ORM（6 模型）
 │   ├── core/                # 配置 / DI / 认证 / 中间件
-│   └── tests/               # 54 个测试
+│   └── tests/               # 60 个测试
 ├── sdk/ml_platform/         # Python SDK（8 模块）
 ├── cli/ml_platform_cli/     # 🖥 命令行工具（30+ 命令）
 ├── DEMO.md                  # 🎥 完整演示流程
