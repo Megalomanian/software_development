@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_fastapi_instrumentator import Instrumentator
 
 from backend.api.auth import router as auth_router
 from backend.api.data import router as data_router
@@ -20,6 +19,12 @@ from backend.services.training_queue import get_queue
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Create tables on startup (required for SQLite; no-op if already exist on PostgreSQL)
+    from backend.models_db.base import Base
+    from backend.core.dependencies import engine as _engine
+    async with _engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     # Configure the training queue with the app's session factory
     get_queue().configure(async_session)
     yield
@@ -35,7 +40,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-Instrumentator().instrument(app).expose(app)
+# Prometheus instrumentator — disabled due to _IncludedRouter compatibility issue
+# Enable when https://github.com/trallnag/prometheus-fastapi-instrumentator/issues/xxx is resolved
+_prometheus_disabled = True
+if not _prometheus_disabled:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    Instrumentator().instrument(app).expose(app)
 
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(data_router, prefix="/api/data", tags=["data"])
